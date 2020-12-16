@@ -42,7 +42,9 @@ plot_cows = ['8022092']
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-date_set = set([total_date_list[50]])
+date_set = total_date_list[50:54]
+# plot consecutive days over extended period of time
+plot_consecutive = False
 
 # split into hot data and other data
 daily_data = {}
@@ -65,29 +67,44 @@ state_indeces = [1, 5, 8]
 x_axis = list(range(1,25))
 
 i = 0
-for date, date_df in daily_data.items():
+consecutive_data = {}
+for date in date_set:
+    date_str = date.strftime("%d-%b-%Y")
+    date_df = daily_data[date_str]
     # create plots for each state
     for state_index in state_indeces:
         # figure number
         i+=1
         # plotting feedback
-        print("Plotting " + str(state_data[state_index]) + " for " + date)
+        print("Plotting " + str(state_data[state_index]) + " for " + date_str)
         # calculate the average day for each dataset
         state_day = create_mins_per_hour(date_df, state_index)
         state_day = state_day.iloc[0,1:].tolist()
-        print(state_day)
         # rotate list to transfer times to GMT+10
         state_day = state_day[-10:] + state_day[:-10]
 
+        if plot_consecutive:
+            if state_index in consecutive_data.keys():
+                consecutive_data[state_index] += state_day
+            else:
+                consecutive_data[state_index] = state_day
+        else:
+            # plot the daily data set
+            plt.figure(i)
+            plt.plot(x_axis,state_day)
+            plt.title("Time spent " + str(state_data[state_index]) + " " + date_str + " (" + cow_category + ")", fontsize=10)
+            plt.xlabel("Hour of the Day")
+            plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
 
-
-
-        # plot the two data sets
-        plt.figure(i)
-        plt.plot(x_axis,state_day)
-        plt.title("Time spent " + str(state_data[state_index]) + " " + date + " (" + cow_category + ")", fontsize=10)
+if plot_consecutive:
+    for state_index, data in consecutive_data.items():
+        plt.figure(state_index)
+        plt.plot(data)
+        plt.title("Time spent " + str(state_data[state_index]) + " " + date_set[0].strftime("%d-%b-%Y") + " - " + date_set[-1].strftime("%d-%b-%Y") + " (" + cow_category + ")",fontsize=10)
         plt.xlabel("Hour of the Day")
         plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
+
+
 
 # show plots
 plt.show()

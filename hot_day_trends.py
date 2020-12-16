@@ -42,9 +42,7 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-#hot_date_set = set(total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65])
-hot_date_set = set([total_date_list[50]])
-
+hot_date_set = set(total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65])
 
 # split into hot data and other data
 heat_data = {}
