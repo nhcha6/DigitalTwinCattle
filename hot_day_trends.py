@@ -1,3 +1,7 @@
+# Used to generate and compare plots of average herd behaviour (can select the entire herd or any sub-group of
+# the herd using categorical cow data) over different time periods. That is, it generates and average 24 hour
+# cycle of a select group of cows over select dates.
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 from average_24hr import *

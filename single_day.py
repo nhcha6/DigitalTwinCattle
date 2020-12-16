@@ -1,3 +1,7 @@
+# Script is used to generate plots of a selection of animals animals across either a single day or across
+# a longer period of consecutive days. It does not average the behaviour across time like the hot_day_trends.py script,
+# instead returning raw animal and herd data.
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 from average_24hr import *
@@ -36,15 +40,15 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 #plot_cows = [str(x) for x in coat_dict["White"] if str(x) in plot_cows_temp]
 
 # or we can manually select cattle
-cow_category = "8022092 - Red, 39%, F"
-plot_cows = ['8022092']
+# cow_category = "8022092 - Red, 39%, F"
+# plot_cows = ['8022092', '8027107']
 
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-date_set = total_date_list[50:54]
+date_set = total_date_list[50:51]
 # plot consecutive days over extended period of time
-plot_consecutive = False
+plot_consecutive = True
 
 # split into hot data and other data
 daily_data = {}
@@ -79,7 +83,8 @@ for date in date_set:
         print("Plotting " + str(state_data[state_index]) + " for " + date_str)
         # calculate the average day for each dataset
         state_day = create_mins_per_hour(date_df, state_index)
-        state_day = state_day.iloc[0,1:].tolist()
+        state_day = average_cows(state_day)
+        #state_day = state_day.iloc[0,1:].tolist()
         # rotate list to transfer times to GMT+10
         state_day = state_day[-10:] + state_day[:-10]
 

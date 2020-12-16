@@ -1,3 +1,7 @@
+# the script runs a multilevel discrete wavelet transformation on selected data. It will be integrated
+# into the other scripts which generate data and plots. Currently copying data across from the other
+# scripts.
+
 import pywt
 import matplotlib.pyplot as plt
 
