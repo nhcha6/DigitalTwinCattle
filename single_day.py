@@ -40,13 +40,13 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 #plot_cows = [str(x) for x in coat_dict["White"] if str(x) in plot_cows_temp]
 
 # or we can manually select cattle
-# cow_category = "8022092 - Red, 39%, F"
-# plot_cows = ['8022092', '8027107']
+cow_category = "8022092 - Red, 39%, F"
+plot_cows = ['8022092']
 
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-date_set = total_date_list[50:51]
+date_set = total_date_list[16:20]
 # plot consecutive days over extended period of time
 plot_consecutive = True
 
@@ -67,7 +67,7 @@ for date in date_set:
 
 # define states to run and default x_axis
 # state_indeces = [1, 2, 3, 4, 5, 6, 7, 8, 9, 15]
-state_indeces = [1, 5, 8]
+state_indeces = [5]
 x_axis = list(range(1,25))
 
 i = 0
@@ -84,7 +84,6 @@ for date in date_set:
         # calculate the average day for each dataset
         state_day = create_mins_per_hour(date_df, state_index)
         state_day = average_cows(state_day)
-        #state_day = state_day.iloc[0,1:].tolist()
         # rotate list to transfer times to GMT+10
         state_day = state_day[-10:] + state_day[:-10]
 
@@ -100,6 +99,8 @@ for date in date_set:
             plt.title("Time spent " + str(state_data[state_index]) + " " + date_str + " (" + cow_category + ")", fontsize=10)
             plt.xlabel("Hour of the Day")
             plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
+
+print(consecutive_data)
 
 if plot_consecutive:
     for state_index, data in consecutive_data.items():
