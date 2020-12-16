@@ -37,7 +37,7 @@ def average_day(data, state):
 
 def create_mins_per_hour(df, state):
     """
-    takes the dataframe of single day with per minute cow state recorded for every day. This function
+    takes the dataframe of single day with per minute cow state recorded for every cow. This function
     converts this to a dataframe where each row corresponds to a cow and each column corresponds to an
     hour of the day. The time per hour spent in the input state is calculated and stored in each element.
 
@@ -89,3 +89,12 @@ def average_cows(per_hour_df):
         daily_average_mins.append(average_mins)
 
     return daily_average_mins
+
+def create_category_dict(category_header, cow_ID_header, details_df):
+    categories = set(details_df[category_header])
+    print(categories)
+    category_dict = {key: [] for key in categories}
+    for category in categories:
+        category_dict[category] = details_df[cow_ID_header][details_df[category_header] == category].tolist()
+    #print(category_dict)
+    return category_dict

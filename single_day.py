@@ -35,61 +35,59 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 # plot_cows = [str(x) for x in coat_dict["Black"]]
 #plot_cows = [str(x) for x in coat_dict["White"] if str(x) in plot_cows_temp]
 
-#or we can manually select cattle
-# cow_category = "8027107 - White, 50%, F"
-# plot_cows = ['8027107']
+# or we can manually select cattle
+cow_category = "8022092 - Red, 39%, F"
+plot_cows = ['8022092']
 
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-#hot_date_set = set(total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65])
-hot_date_set = set([total_date_list[50]])
-
+date_set = set([total_date_list[50]])
 
 # split into hot data and other data
-heat_data = {}
-other_data = {}
+daily_data = {}
 
 # import data from excel for each date
-for date in total_date_list:
+for date in date_set:
     # upload daily data
     date_str = date.strftime("%d-%b-%Y")
     date_df = pd.read_csv(data_dir + file_name + date_str + '.csv')
+    # update for individual cows only
     if plot_cows:
         new_columns = ["Cow"] + [x for x in plot_cows if x in date_df.columns]
         date_df = date_df[new_columns]
-
-    if date in hot_date_set:
-        heat_data[date_str] = date_df
-    else:
-        other_data[date_str] = date_df
+    # add to date_df
+    daily_data[date_str] = date_df
 
 # define states to run and default x_axis
 # state_indeces = [1, 2, 3, 4, 5, 6, 7, 8, 9, 15]
 state_indeces = [1, 5, 8]
 x_axis = list(range(1,25))
 
-# create plots for each state
-for state_index in state_indeces:
-    print("Plotting for " + str(state_data[state_index]))
-    # calculate the average day for each dataset
-    ave_day_other = average_day(other_data, state_index)
-    # rotate list to transfer times to GMT+10
-    ave_day_other = ave_day_other[-10:] + ave_day_other[:-10]
-    print("First dataset complete")
-    ave_day_heat = average_day(heat_data, state_index)
-    # again adjust timing
-    ave_day_heat = ave_day_heat[-10:] + ave_day_heat[:-10]
-    print("Second dataset complete")
+i = 0
+for date, date_df in daily_data.items():
+    # create plots for each state
+    for state_index in state_indeces:
+        # figure number
+        i+=1
+        # plotting feedback
+        print("Plotting " + str(state_data[state_index]) + " for " + date)
+        # calculate the average day for each dataset
+        state_day = create_mins_per_hour(date_df, state_index)
+        state_day = state_day.iloc[0,1:].tolist()
+        print(state_day)
+        # rotate list to transfer times to GMT+10
+        state_day = state_day[-10:] + state_day[:-10]
 
-    # plot the two data sets
-    plt.figure(state_index)
-    plt.plot(x_axis,ave_day_other, label="other")
-    plt.plot(x_axis,ave_day_heat, label="08-Dec-19")
-    plt.legend(loc="upper right")
-    plt.title("Average time spent " + str(state_data[state_index]) + " (" + cow_category + " 19-Oct-18 to 1-Jan-19)", fontsize=10)
-    plt.xlabel("Hour of the Day")
-    plt.ylabel("Average minutes " + str(state_data[state_index]) + " per hour")
+
+
+
+        # plot the two data sets
+        plt.figure(i)
+        plt.plot(x_axis,state_day)
+        plt.title("Time spent " + str(state_data[state_index]) + " " + date + " (" + cow_category + ")", fontsize=10)
+        plt.xlabel("Hour of the Day")
+        plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
 
 # show plots
 plt.show()
