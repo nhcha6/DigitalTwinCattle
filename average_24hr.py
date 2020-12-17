@@ -92,7 +92,6 @@ def average_cows(per_hour_df):
 
 def create_category_dict(category_header, cow_ID_header, details_df):
     categories = set(details_df[category_header])
-    print(categories)
     category_dict = {key: [] for key in categories}
     for category in categories:
         category_dict[category] = details_df[cow_ID_header][details_df[category_header] == category].tolist()

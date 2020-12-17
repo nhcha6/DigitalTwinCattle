@@ -68,15 +68,12 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
     # define x-axis
     x_axis = list(range(1,25))
 
-    i = 0
     consecutive_data = {}
     for date in date_set:
         date_str = date.strftime("%d-%b-%Y")
         date_df = daily_data[date_str]
         # create plots for each state
         for state_index in state_indeces:
-            # figure number
-            i+=1
             # plotting feedback
             print("Plotting " + str(state_data[state_index]) + " for " + date_str)
             # calculate the average day for each dataset
@@ -92,21 +89,22 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
                     consecutive_data[state_index] = state_day
             else:
                 # plot the daily data set
-                plt.figure(i)
+                plt.figure()
                 plt.plot(x_axis,state_day)
                 plt.title("Time spent " + str(state_data[state_index]) + " " + date_str + " (" + cow_category + ")", fontsize=10)
                 plt.xlabel("Hour of the Day")
                 plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
 
-    print(consecutive_data)
-
     if plot_consecutive:
         for state_index, data in consecutive_data.items():
-            plt.figure(state_index)
+            plt.figure()
             plt.plot(data)
             plt.title("Time spent " + str(state_data[state_index]) + " " + date_set[0].strftime("%d-%b-%Y") + " - " + date_set[-1].strftime("%d-%b-%Y") + " (" + cow_category + ")",fontsize=10)
             plt.xlabel("Hour of the Day")
             plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
 
-    # show plots
-    plt.show()
+        # return the most recent data point for use in filtering
+        return data
+
+    # return most recent state_day if not running consecutive
+    return state_day

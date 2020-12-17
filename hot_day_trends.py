@@ -83,7 +83,7 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
         print("Second dataset complete")
 
         # plot the two data sets
-        plt.figure(state_index)
+        plt.figure()
         plt.plot(x_axis,ave_day_other, label="other")
         plt.plot(x_axis,ave_day_heat, label="08-Dec-19")
         plt.legend(loc="upper right")
@@ -91,5 +91,6 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
         plt.xlabel("Hour of the Day")
         plt.ylabel("Average minutes " + str(state_data[state_index]) + " per hour")
 
-    # show plots
-    plt.show()
+    # return the data of the most recent state run
+    return ave_day_heat, ave_day_other
+
