@@ -41,6 +41,7 @@ other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28
 # extrapolate to length of signal
 # hot_days, other_days = extrapolate_heat(int(len(signal)/24))
 
+# run a filtering algorithm and plot
 DWT_level_2(hot_days, "hot", other_days, "other", signal, "signal")
 
 # show plots
