@@ -22,7 +22,7 @@ state_data = {0: "side lying",
               7: "grazing",
               8: "panting",
               9: "unsure",
-              15: "invalid data"}
+              15: "unclassified"}
 
 # default setting of these variables
 plot_cows = None
