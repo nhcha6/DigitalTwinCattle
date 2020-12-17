@@ -1,6 +1,6 @@
 from single_day import *
 from hot_day_trends import *
-from wavelet_test import *
+from filter_data import *
 
 # default setting of these variables
 plot_cows = None
