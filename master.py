@@ -31,18 +31,27 @@ plot_consecutive = True
 state_indeces = [8]
 
 # run hot_day_trends
-# ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
+#ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
 
 # run single_day()
 signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive)
 hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive)
-other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
+#other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
 
 # extrapolate to length of signal
-# hot_days, other_days = extrapolate_heat(int(len(signal)/24))
+#hot_days_ex, other_days_ex = extrapolate_heat(int(len(signal)/24), ave_day_heat, ave_day_other)
 
 # run a filtering algorithm and plot
-DWT_level_2(hot_days, "hot", other_days, "other", signal, "signal")
+# DWT_level_2(hot_days, "hot", other_days, "other", signal, "signal")
+
+# run fft
+fourier_transform(signal, cow_category)
+fourier_transform(hot_days, "All Animals")
+#fourier_transform(hot_days_ex, "Hot Day Average")
+
+# run filter
+fil_lp_filter(3.5, 5, signal, cow_category)
+fil_lp_filter(3.5, 5, hot_days, 'All')
 
 # show plots
 plt.show()
