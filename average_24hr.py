@@ -97,3 +97,24 @@ def create_category_dict(category_header, cow_ID_header, details_df):
         category_dict[category] = details_df[cow_ID_header][details_df[category_header] == category].tolist()
     #print(category_dict)
     return category_dict
+
+def convert_UTC_AEST(dict_UTC):
+    """
+    creates new identical dictionary, except with dates and time in UTC instead of AEST. Note that the
+    first date included in the data is droppped as it doesn't include a full cycle.
+
+    :param dict_UTC:
+    :return:
+    """
+    new_dict_AEST = {}
+    past_flag = False
+
+    for key, value in dict_UTC.items():
+        if past_flag:
+            new_df = pd.concat([past_df, value.iloc[0:840]], axis=0)
+            new_df = new_df.reset_index(drop=True)
+            new_dict_AEST[key] = new_df
+        past_df = value.iloc[840:]
+        past_flag = True
+
+    return new_dict_AEST

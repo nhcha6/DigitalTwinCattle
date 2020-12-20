@@ -46,12 +46,15 @@ state_data = {0: "side lying",
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-hot_date_set = set(total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65])
+hot_date_list = total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65]
+hot_date_set = set([date.strftime("%d-%b-%Y") for date in hot_date_list])
 
 def hot_day_trends(plot_cows, cow_category, state_indeces):
     # split into hot data and other data
     heat_data = {}
     other_data = {}
+    all_data = {}
+
     # import data from excel for each date
     for date in total_date_list:
         # upload daily data
@@ -60,11 +63,17 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
         if plot_cows:
             new_columns = ["Cow"] + [x for x in plot_cows if x in date_df.columns]
             date_df = date_df[new_columns]
+        all_data[date_str] = date_df
 
-        if date in hot_date_set:
+    all_data_AEST = convert_UTC_AEST(all_data)
+
+    for date_str, date_df in all_data_AEST.items():
+        if date_str in hot_date_set:
             heat_data[date_str] = date_df
         else:
             other_data[date_str] = date_df
+
+    print(heat_data)
 
     # define states to run and default x_axis
     x_axis = list(range(1,25))
@@ -74,18 +83,14 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
         print("Plotting for " + str(state_data[state_index]))
         # calculate the average day for each dataset
         ave_day_other = average_day(other_data, state_index)
-        # rotate list to transfer times to GMT+10
-        ave_day_other = ave_day_other[-10:] + ave_day_other[:-10]
         print("First dataset complete")
         ave_day_heat = average_day(heat_data, state_index)
-        # again adjust timing
-        ave_day_heat = ave_day_heat[-10:] + ave_day_heat[:-10]
         print("Second dataset complete")
 
         # plot the two data sets
         plt.figure()
         plt.plot(x_axis,ave_day_other, label="other")
-        plt.plot(x_axis,ave_day_heat, label="08-Dec-19")
+        plt.plot(x_axis,ave_day_heat, label="hot")
         plt.legend(loc="upper right")
         plt.title("Average time spent " + str(state_data[state_index]) + " (" + cow_category + " 19-Oct-18 to 1-Jan-19)", fontsize=10)
         plt.xlabel("Hour of the Day")

@@ -31,11 +31,12 @@ date_set = total_date_list[16:20]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [1]
+state_indeces = [1, 5, 8]
 
 # run hot_day_trends
-#ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
+ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
 
+"""
 # run single_day()
 signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive)
 hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive)
@@ -57,6 +58,7 @@ fourier_transform(hot_days, "All Animals")
 # fil_lp_filter(cutoffs, widths, signal, cow_category)
 fil_lp_filter([5.5], [6], signal, cow_category)
 fil_lp_filter([5.5], [6], hot_days, 'All')
+"""
 
 # show plots
 plt.show()
