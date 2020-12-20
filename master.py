@@ -25,18 +25,18 @@ plot_cows = ['8022092']
 # can also select the specific dates we wish to plot via single_day()
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-date_set = total_date_list[16:20]
+date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[16:20]]
 #date_set = total_date_list[42:46]
 # plot consecutive days over extended period of time
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [1, 5, 8]
+state_indeces = [8]
 
 # run hot_day_trends
-ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
+#ave_day_heat, ave_day_other = hot_day_trends(None, "All", state_indeces)
 
-"""
+
 # run single_day()
 signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive)
 hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive)
@@ -56,9 +56,8 @@ fourier_transform(hot_days, "All Animals")
 # cutoffs = [i+0.5 for i in range(1,6,2)]
 # widths = [4,8]
 # fil_lp_filter(cutoffs, widths, signal, cow_category)
-fil_lp_filter([5.5], [6], signal, cow_category)
-fil_lp_filter([5.5], [6], hot_days, 'All')
-"""
+fil_lp_filter([3.5], [8], signal, cow_category)
+fil_lp_filter([3.5], [8], hot_days, 'All')
 
 # show plots
 plt.show()

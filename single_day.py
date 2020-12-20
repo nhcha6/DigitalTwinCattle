@@ -50,27 +50,36 @@ state_data = {0: "side lying",
 # # plot consecutive days over extended period of time
 # plot_consecutive = True
 
+# create date range for extracting data from excel
+total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
+
 def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive):
-    # isolate days to plot
-    daily_data = {}
-    # import data from excel for each date
-    for date in date_set:
+    # store all data
+    all_data = {}
+    for date in total_date_list:
         # upload daily data
         date_str = date.strftime("%d-%b-%Y")
         date_df = pd.read_csv(data_dir + file_name + date_str + '.csv')
-        # update for individual cows only
         if plot_cows:
             new_columns = ["Cow"] + [x for x in plot_cows if x in date_df.columns]
             date_df = date_df[new_columns]
-        # add to date_df
-        daily_data[date_str] = date_df
+        all_data[date_str] = date_df
+
+    all_data_AEST = convert_UTC_AEST(all_data)
+
+    # isolate days to plot
+    daily_data = {}
+    # import data from excel for each date
+    for date_str, data in all_data_AEST.items():
+        if date_str in date_set:
+            # add to date_df
+            daily_data[date_str] = data
 
     # define x-axis
     x_axis = list(range(1,25))
 
     consecutive_data = {}
-    for date in date_set:
-        date_str = date.strftime("%d-%b-%Y")
+    for date_str in date_set:
         date_df = daily_data[date_str]
         # create plots for each state
         for state_index in state_indeces:
@@ -79,8 +88,6 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
             # calculate the average day for each dataset
             state_day = create_mins_per_hour(date_df, state_index)
             state_day = average_cows(state_day)
-            # rotate list to transfer times to GMT+10
-            state_day = state_day[-10:] + state_day[:-10]
 
             if plot_consecutive:
                 if state_index in consecutive_data.keys():
@@ -99,7 +106,7 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
         for state_index, data in consecutive_data.items():
             plt.figure()
             plt.plot(data)
-            plt.title("Time spent " + str(state_data[state_index]) + " " + date_set[0].strftime("%d-%b-%Y") + " - " + date_set[-1].strftime("%d-%b-%Y") + " (" + cow_category + ")",fontsize=10)
+            plt.title("Time spent " + str(state_data[state_index]) + " " + date_set[0] + " - " + date_set[-1] + " (" + cow_category + ")",fontsize=10)
             plt.xlabel("Hour of the Day")
             plt.ylabel("Minutes " + str(state_data[state_index]) + " per hour")
 

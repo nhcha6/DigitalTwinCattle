@@ -73,8 +73,6 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
         else:
             other_data[date_str] = date_df
 
-    print(heat_data)
-
     # define states to run and default x_axis
     x_axis = list(range(1,25))
 
