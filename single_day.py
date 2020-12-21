@@ -53,7 +53,7 @@ state_data = {0: "side lying",
 # create date range for extracting data from excel
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 
-def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive):
+def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, fill_flag):
     # store all data
     all_data = {}
     for date in total_date_list:
@@ -65,12 +65,16 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
             date_df = date_df[new_columns]
         all_data[date_str] = date_df
 
-    all_data_AEST = convert_UTC_AEST(all_data)
+    all_data = convert_UTC_AEST(all_data)
+
+    # convert to fill data if requested
+    if fill_flag:
+        all_data = convert_to_fill(all_data)
 
     # isolate days to plot
     daily_data = {}
     # import data from excel for each date
-    for date_str, data in all_data_AEST.items():
+    for date_str, data in all_data.items():
         if date_str in date_set:
             # add to date_df
             daily_data[date_str] = data

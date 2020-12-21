@@ -49,7 +49,7 @@ total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 hot_date_list = total_date_list[16:20] + total_date_list[42:46] + total_date_list[62:65]
 hot_date_set = set([date.strftime("%d-%b-%Y") for date in hot_date_list])
 
-def hot_day_trends(plot_cows, cow_category, state_indeces):
+def hot_day_trends(plot_cows, cow_category, state_indeces, fill_flag):
     # split into hot data and other data
     heat_data = {}
     other_data = {}
@@ -65,9 +65,13 @@ def hot_day_trends(plot_cows, cow_category, state_indeces):
             date_df = date_df[new_columns]
         all_data[date_str] = date_df
 
-    all_data_AEST = convert_UTC_AEST(all_data)
+    all_data = convert_UTC_AEST(all_data)
 
-    for date_str, date_df in all_data_AEST.items():
+    # convert to fill data if requested
+    if fill_flag:
+        all_data = convert_to_fill(all_data)
+
+    for date_str, date_df in all_data.items():
         if date_str in hot_date_set:
             heat_data[date_str] = date_df
         else:

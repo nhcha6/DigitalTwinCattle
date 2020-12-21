@@ -2,6 +2,8 @@ from single_day import *
 from hot_day_trends import *
 from filter_data import *
 
+###################### ESTABLISH REQUIRED DATA ##################
+
 # default setting of these variables
 plot_cows = None
 cow_category = "All"
@@ -12,6 +14,11 @@ cow_details_df = pd.read_csv(data_dir + animal_info_name)
 breed_dict = create_category_dict("Breed", "Tag#", cow_details_df)
 coat_dict = create_category_dict("Coat colour", "Tag#", cow_details_df)
 docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
+
+#################################################################
+
+################# SELECT COWS TO BE PLOTTED #####################
+
 # select cows to be plotted, cow_category is the descriptor for the plot title.
 # cow_category = "Black"
 # plot_cows = [str(x) for x in coat_dict["Black"]]
@@ -21,6 +28,10 @@ cow_category = "8027107 - White, 50%, F"
 plot_cows = ['8027107']
 # cow_category = "8022092 - Red, 39%, F"
 # plot_cows = ['8022092']
+
+##################################################################
+
+############## SELECT DATES AND STATE TO ANALYSE #################
 
 # can also select the specific dates we wish to plot via single_day()
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
@@ -34,31 +45,42 @@ plot_consecutive = True
 # select state indeces
 state_indeces = [5]
 
-# run hot_day_trends
-#ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, [8,5])
+##################################################################
 
+########### HOT VS NON-HOT DAY TRENDS #############
 
-# run single_day()
-signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive)
-hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive)
-#other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
-
+# ave_day_heat, ave_day_other = hot_day_trends(None, "All", [8,5,1], False)
 # extrapolate to length of signal
 #hot_days_ex, other_days_ex = extrapolate_heat(int(len(signal)/24), ave_day_heat, ave_day_other)
+
+####################################################
+
+
+############### SINGLE DAY ANALYSIS ################
+
+signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+#hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+#other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
+
+####################################################
+
+################ FILTERING ANALYSIS ##################
 
 # run a filtering algorithm and plot
 # DWT_level_2(hot_days, "hot", other_days, "other", signal, "signal")
 
 # run fft
-fourier_transform(signal, cow_category)
-fourier_transform(hot_days, "All Animals")
+#fourier_transform(signal, cow_category)
+#fourier_transform(hot_days, "All Animals")
 #fourier_transform(hot_days_ex, "Hot Day Average")
 
 # cutoffs = [i+0.5 for i in range(1,6,2)]
 # widths = [4,8]
 # fil_lp_filter(cutoffs, widths, signal, cow_category)
-fil_lp_filter([4], [7], signal, cow_category)
-fil_lp_filter([4], [7], hot_days, 'All')
+#fil_lp_filter([4], [7], signal, cow_category)
+#fil_lp_filter([4], [7], hot_days, 'All')
+
+####################################################
 
 # show plots
 plt.show()

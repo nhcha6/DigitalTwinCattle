@@ -3,6 +3,7 @@
 # see average_day function for details of inputs.
 
 import pandas as pd
+pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 def average_day(data, state):
     """
@@ -54,7 +55,7 @@ def create_mins_per_hour(df, state):
         # extract the cow df
         cow_df = df[cow]
         new_cow_data = [cow]
-        # iterate through the column of each cow and count the time spent in the given state each hour.
+        # iterate through the row of each cow and count the time spent in the given state each hour.
         state_count = 0
         for index, value in cow_df.items():
             if value == state:
@@ -118,3 +119,43 @@ def convert_UTC_AEST(dict_UTC):
         past_flag = True
 
     return new_dict_AEST
+
+def convert_to_fill(cows_dict):
+    """
+    This function takes the raw cow data dictionary (as it was imported from the csv) and converts it to
+    the 'fill' data. That is, if two consecutive minutes have the same state, this state is filled
+    until two consecutive minutes of an additional state are recorded.
+
+    :param cows_dict:
+    :return:
+    """
+    # declare new dictionary
+    fill_cows_dict = {}
+    # loop through each data of data
+    for date, df in cows_dict.items():
+        # deep copy of the df for the current data
+        df_new = df.copy()
+        # iterate through each cow
+        for cow in df.columns:
+            # skip first header
+            if cow == 'Cow':
+                continue
+            # define variables for creating fill data
+            prev_state = None
+            fill_state = None
+            new_col = []
+            # iterate each state and build a new column of fill data
+            for index, state in df[cow].items():
+                if state == prev_state:
+                    fill_state = state
+                if fill_state:
+                    new_col.append(fill_state)
+                else:
+                    new_col.append(state)
+                prev_state = state
+            # update new df with fill data
+            df_new[cow] = new_col
+        # update fill date/data dictionary with the new dict
+        fill_cows_dict[date] = df_new
+
+    return fill_cows_dict
