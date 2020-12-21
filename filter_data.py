@@ -74,7 +74,7 @@ def fourier_transform(signal, title):
 
 def fil_lp_filter(cutoff_hz_list, width_hz_list, signal, signal_name):
     i = 0
-    plt.figure(figsize=(len(width_hz_list)*10, len(cutoff_hz_list)*4))
+    plt.figure(figsize=(len(width_hz_list)*5, len(cutoff_hz_list)*2))
     plt.suptitle("Low Pass vs Unfiltered Signal (" + signal_name + ")")
     for cutoff_hz in cutoff_hz_list:
         for width_hz in width_hz_list:
@@ -126,4 +126,5 @@ def fil_lp_filter(cutoff_hz_list, width_hz_list, signal, signal_name):
             # samples are "corrupted" by the initial conditions.
             plt.xlabel('days')
             plt.title('Cutoff = ' + str(cutoff_hz) + 'Hz, Width = ' + str(width_hz) + 'Hz', fontsize=10)
+            plt.grid()
             plt.tight_layout()
