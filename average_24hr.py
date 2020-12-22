@@ -144,27 +144,28 @@ def convert_to_fill(cows_dict):
                 continue
             # define variables for creating fill data (continuity between days maintained)
             try:
-                prev_state = fill_cows_dict[prev_date][cow].iloc[1439]
-                print(prev_state)
-                fill_state = prev_state
+                prev_state = cows_dict[prev_date][cow].iloc[1439]
+                fill_state = fill_cows_dict[prev_date][cow].iloc[1439]
             except KeyError:
                 prev_state = None
                 fill_state = None
             # iterate each state and build a new column of fill data
             new_col = []
             for index, state in df[cow].items():
+                # update fill_state if previous two states are the same
                 if state == prev_state:
                     fill_state = state
+                # if fill_state is not None, we append it.
                 if fill_state:
                     new_col.append(fill_state)
                 else:
                     new_col.append(state)
+                # update previous state
                 prev_state = state
             # update new df with fill data
             df_new[cow] = new_col
         # update fill date/data dictionary with the new dict
         fill_cows_dict[date] = df_new
-        print(df_new)
         prev_date = date
 
     return fill_cows_dict
