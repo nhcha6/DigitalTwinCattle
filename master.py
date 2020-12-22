@@ -43,7 +43,7 @@ date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:36]]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [8]
+state_indeces = [5]
 
 ##################################################################
 
@@ -59,27 +59,31 @@ state_indeces = [8]
 ############### SINGLE DAY ANALYSIS ################
 
 signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
-#hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
 #other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
 
 ####################################################
 
 ################ FILTERING ANALYSIS ##################
 
-# run a filtering algorithm and plot
+# WAVELET
 # DWT_level_2(hot_days, "hot", other_days, "other", signal, "signal")
 
-# run fft
+# FFT
 #fourier_transform(signal, cow_category)
 #fourier_transform(hot_days, "All Animals")
 #fourier_transform(hot_days_ex, "Hot Day Average")
 
+# FIR LP
 # cutoffs = [i+0.5 for i in range(1,6,2)]
 # widths = [4,8]
 # fil_lp_filter(cutoffs, widths, signal, cow_category)
-filtered_signal = fil_lp_filter([3], [7], signal, cow_category)
+# filtered_signal = fil_lp_filter([3], [7], signal, cow_category)
+# fil_lp_filter([4], [7], hot_days, 'All')
 
-#fil_lp_filter([4], [7], hot_days, 'All')
+# IIR LP
+butter_lp_filter([4], [4], signal, cow_category)
+butter_lp_filter([4], [4], hot_days, 'All')
 
 ####################################################
 

@@ -5,7 +5,8 @@
 import pywt
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import kaiserord, lfilter, firwin, freqz
+from scipy.signal import kaiserord, lfilter, firwin, freqs, butter, filtfilt
+
 
 def extrapolate_heat(num_days, state_hot, state_other):
     state_hot_ex = []
@@ -128,8 +129,28 @@ def fil_lp_filter(cutoff_hz_list, width_hz_list, signal, signal_name):
             plt.title('Cutoff = ' + str(cutoff_hz) + 'Hz, Width = ' + str(width_hz) + 'Hz', fontsize=10)
             plt.grid()
             plt.tight_layout()
-            print(int(delay*24))
             return filtered_signal[int(delay*24):]
 
-def area_under_signal():
-    print('hey')
+def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name):
+    i = 0
+    plt.figure(figsize=(len(order_list) * 5, len(cutoff_hz_list) * 2))
+    plt.suptitle("Low Pass IIR vs Unfiltered Signal (" + signal_name + ")")
+    for fc in cutoff_hz_list:
+        for order in order_list:
+            i+=1
+            fs = 24
+            t = np.arange(len(signal)) / fs
+            wc = fc/(fs/2) # normalise relative to nyquist frequency
+
+            # create filter and run
+            b, a = butter(order, wc, 'low')
+            filtered_signal = filtfilt(b,a,signal)
+
+            plt.subplot(len(cutoff_hz_list), len(order_list), i)
+            plt.plot(t, signal, label='signal')
+            plt.plot(t, filtered_signal, 'r-',  label='low_pass')
+
+            plt.xlabel('days')
+            plt.title('Cutoff = ' + str(fc) + 'Hz, Order = ' + str(order), fontsize=10)
+            plt.grid()
+            plt.tight_layout()
