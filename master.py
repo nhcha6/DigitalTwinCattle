@@ -43,7 +43,7 @@ date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:36]]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [5]
+state_indeces = [8]
 
 ##################################################################
 
@@ -77,7 +77,8 @@ signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plo
 # cutoffs = [i+0.5 for i in range(1,6,2)]
 # widths = [4,8]
 # fil_lp_filter(cutoffs, widths, signal, cow_category)
-fil_lp_filter([4], [7], signal, cow_category)
+filtered_signal = fil_lp_filter([3], [7], signal, cow_category)
+
 #fil_lp_filter([4], [7], hot_days, 'All')
 
 ####################################################
