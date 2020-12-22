@@ -3,7 +3,7 @@
 # see average_day function for details of inputs.
 
 import pandas as pd
-pd.set_option("display.max_rows", None, "display.max_columns", None)
+#pd.set_option("display.max_rows", None, "display.max_columns", None)
 
 def average_day(data, state):
     """
@@ -131,6 +131,8 @@ def convert_to_fill(cows_dict):
     """
     # declare new dictionary
     fill_cows_dict = {}
+    # previous date to ensure fill across dates
+    prev_date = None
     # loop through each data of data
     for date, df in cows_dict.items():
         # deep copy of the df for the current data
@@ -140,11 +142,16 @@ def convert_to_fill(cows_dict):
             # skip first header
             if cow == 'Cow':
                 continue
-            # define variables for creating fill data
-            prev_state = None
-            fill_state = None
-            new_col = []
+            # define variables for creating fill data (continuity between days maintained)
+            try:
+                prev_state = fill_cows_dict[prev_date][cow].iloc[1439]
+                print(prev_state)
+                fill_state = prev_state
+            except KeyError:
+                prev_state = None
+                fill_state = None
             # iterate each state and build a new column of fill data
+            new_col = []
             for index, state in df[cow].items():
                 if state == prev_state:
                     fill_state = state
@@ -157,5 +164,7 @@ def convert_to_fill(cows_dict):
             df_new[cow] = new_col
         # update fill date/data dictionary with the new dict
         fill_cows_dict[date] = df_new
+        print(df_new)
+        prev_date = date
 
     return fill_cows_dict
