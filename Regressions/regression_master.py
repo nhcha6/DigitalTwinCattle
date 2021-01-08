@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(1, '/Users/nicolaschapman/Documents/DigitalTwinCattle/DigitalTwinCattle/TrendsAndFiltering')
+
 from single_day import *
 from hot_day_trends import *
 from filter_data import *

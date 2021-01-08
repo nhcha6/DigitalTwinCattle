@@ -7,7 +7,7 @@ from datetime import datetime
 from average_24hr import *
 
 # directary of animal state data and anaimal information
-data_dir = 'HeatData/csvs_brisbane_18_10_18__2_1_19_tags/'
+data_dir = '/Users/nicolaschapman/Documents/DigitalTwinCattle/DigitalTwinCattle/TrendsAndFiltering/HeatData/csvs_brisbane_18_10_18__2_1_19_tags/'
 file_name = 'DailyCowStates_Brisbane Valley Feedlot_'
 animal_info_name = 'Cow_ID.csv'
 
