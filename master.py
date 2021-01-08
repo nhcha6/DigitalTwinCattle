@@ -1,6 +1,7 @@
 from single_day import *
 from hot_day_trends import *
 from filter_data import *
+from clustering import *
 
 ###################### ESTABLISH REQUIRED DATA ##################
 
@@ -24,10 +25,10 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 # plot_cows = [str(x) for x in coat_dict["Black"]]
 
 # or we can manually select cattle
-# cow_category = "8027107 - White, 50%, F"
-# plot_cows = ['8027107']
-cow_category = "8022092 - Red, 39%, F"
-plot_cows = ['8022092']
+cow_category = "8027107 - White, 50%, F"
+plot_cows = ['8027107']
+# cow_category = "8022092 - Red, 39%, F"
+# plot_cows = ['8022092']
 
 ##################################################################
 
@@ -36,20 +37,20 @@ plot_cows = ['8022092']
 # can also select the specific dates we wish to plot via single_day()
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-#date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[16:20]]
-date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:36]]
+date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[16:20]]
+#date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:36]]
 #date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:42]]
 # plot consecutive days over extended period of time
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [5]
+state_indeces = [4]
 
 ##################################################################
 
 ########### HOT VS NON-HOT DAY TRENDS #############
 
-# ave_day_heat, ave_day_other = hot_day_trends(None, "All", [8,5,1], False)
+ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_indeces, True)
 # extrapolate to length of signal
 #hot_days_ex, other_days_ex = extrapolate_heat(int(len(signal)/24), ave_day_heat, ave_day_other)
 
@@ -82,8 +83,26 @@ hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecut
 # fil_lp_filter([4], [7], hot_days, 'All')
 
 # IIR LP
-butter_lp_filter([4], [4], signal, cow_category)
-butter_lp_filter([4], [4], hot_days, 'All')
+filtered_signal = butter_lp_filter([4], [4], signal, cow_category)
+filtered_herd = butter_lp_filter([4], [4], hot_days, 'All')
+
+####################################################
+
+################ AREA UNDER GRAPH ##################
+
+# area_signal = area_under_graph(filtered_signal)
+# print(area_signal)
+# area_herd = area_under_graph(filtered_herd)
+# print(area_herd)
+# area_animal = area_under_graph(ave_day_other)
+# print(area_animal)
+
+herd_comp, animal_ave_comp = heat_stress_comp(filtered_signal, filtered_herd, ave_day_other)
+# inverse when running for resting!
+# herd_comp = [1/x for x in herd_comp]
+# animal_ave_comp = [1/x for x in animal_ave_comp]
+print(herd_comp)
+print(animal_ave_comp)
 
 ####################################################
 

@@ -129,7 +129,8 @@ def fil_lp_filter(cutoff_hz_list, width_hz_list, signal, signal_name):
             plt.title('Cutoff = ' + str(cutoff_hz) + 'Hz, Width = ' + str(width_hz) + 'Hz', fontsize=10)
             plt.grid()
             plt.tight_layout()
-            return filtered_signal[int(delay*24):]
+
+    return filtered_signal[int(delay*24):]
 
 def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name):
     i = 0
@@ -154,3 +155,6 @@ def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name):
             plt.title('Cutoff = ' + str(fc) + 'Hz, Order = ' + str(order), fontsize=10)
             plt.grid()
             plt.tight_layout()
+
+    return filtered_signal
+
