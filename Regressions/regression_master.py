@@ -51,7 +51,7 @@ date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[1:-1]]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [1]
+state_indeces = [2]
 
 ##################################################################
 
@@ -70,7 +70,7 @@ for index in state_indeces:
         # IIR LP filter
         cow_data = [state_data[state_indeces[0]] + " filtered"]
         cow_data.append(plot_cow)
-        filtered_signal = butter_lp_filter([4.5], [4], signal, plot_cow)
+        filtered_signal = butter_lp_filter([4], [4], signal, plot_cow)
         cow_data += list(filtered_signal)
         excel_data.append(cow_data)
 
@@ -83,7 +83,7 @@ for index in state_indeces:
     # filtered herd behaviour
     cow_data = [state_data[state_indeces[0]] + " filtered"]
     cow_data.append("All")
-    filtered_herd = butter_lp_filter([4.5], [4], all_cows, 'All')
+    filtered_herd = butter_lp_filter([4], [4], all_cows, 'All')
     cow_data += list(filtered_herd)
     excel_data.append(cow_data)
 
