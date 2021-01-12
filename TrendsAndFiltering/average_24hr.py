@@ -169,3 +169,39 @@ def convert_to_fill(cows_dict):
         prev_date = date
 
     return fill_cows_dict
+
+def convert_cleaned_to_fill(cleaned_df):
+    df_new = cleaned_df.copy()
+    for cow in cleaned_df.columns:
+        # skip time columns
+        if cow=='AEST_Time' or cow=='AEST_Date':
+            continue
+
+        # update fill data
+        prev_state = None
+        fill_state = None
+        new_col = []
+        for index, state in cleaned_df[cow].items():
+            # first iteration has no prev_state
+            if not index:
+                prev_state = state
+
+            # else update fill_state and prev_state
+            else:
+                if state==prev_state:
+                    fill_state = state
+                prev_state = state
+
+            # if fill_state exists, update col. Otherwise use current state.
+            if fill_state:
+                new_col.append(fill_state)
+            else:
+                new_col.append(state)
+
+        df_new[cow] = new_col
+
+    return df_new
+
+
+
+

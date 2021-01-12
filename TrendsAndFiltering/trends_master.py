@@ -50,7 +50,7 @@ state_indeces = [4]
 
 ########### HOT VS NON-HOT DAY TRENDS #############
 
-ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_indeces, True)
+#ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_indeces, True)
 # extrapolate to length of signal
 #hot_days_ex, other_days_ex = extrapolate_heat(int(len(signal)/24), ave_day_heat, ave_day_other)
 
@@ -59,8 +59,9 @@ ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_inde
 
 ############### SINGLE DAY ANALYSIS ################
 
-signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
-hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+hot_days = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+signal = single_day_trends_clean(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+#hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
 #other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
 
 ####################################################
@@ -97,12 +98,12 @@ filtered_herd = butter_lp_filter([4], [4], hot_days, 'All')
 # area_animal = area_under_graph(ave_day_other)
 # print(area_animal)
 
-herd_comp, animal_ave_comp = heat_stress_comp(filtered_signal, filtered_herd, ave_day_other)
+#herd_comp, animal_ave_comp = heat_stress_comp(filtered_signal, filtered_herd, ave_day_other)
 # inverse when running for resting!
 # herd_comp = [1/x for x in herd_comp]
 # animal_ave_comp = [1/x for x in animal_ave_comp]
-print(herd_comp)
-print(animal_ave_comp)
+# print(herd_comp)
+# print(animal_ave_comp)
 
 ####################################################
 
