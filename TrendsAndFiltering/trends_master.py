@@ -59,9 +59,10 @@ state_indeces = [4]
 
 ############### SINGLE DAY ANALYSIS ################
 
-hot_days = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
-signal = single_day_trends_clean(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
-#hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+#signal = single_day_trends_clean(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+#hot_days = single_day_trends_clean(None, "All", state_indeces, date_set, plot_consecutive, True)
 #other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
 
 ####################################################

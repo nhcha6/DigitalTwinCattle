@@ -72,8 +72,6 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
     if fill_flag:
         all_data = convert_to_fill(all_data)
 
-    print(all_data)
-
     # isolate days to plot
     daily_data = {}
     # import data from excel for each date
@@ -124,47 +122,28 @@ def single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_con
     return state_day
 
 def single_day_trends_clean(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, fill_flag):
-    # # store all data
-    # all_data = {}
-    # for date in total_date_list:
-    #     # upload daily data
-    #     date_str = date.strftime("%d-%b-%Y")
-    #     date_df = pd.read_csv(data_dir + file_name + date_str + '.csv')
-    #     if plot_cows:
-    #         new_columns = ["Cow"] + [x for x in plot_cows if x in date_df.columns]
-    #         date_df = date_df[new_columns]
-    #     all_data[date_str] = date_df
-    #
-    # all_data = convert_UTC_AEST(all_data)
-
     # import clean data
     cleaned_data_df = pd.read_csv(clean_data_dir)
     # select only relevant cows
-    new_columns = ["AEST_Date", "AEST_Time"] + [x for x in cleaned_data_df.columns if x[1:] in plot_cows]
-    cleaned_data_df = cleaned_data_df[new_columns]
-    print(cleaned_data_df)
+    if plot_cows:
+        new_columns = ["AEST_Date", "AEST_Time"] + [x for x in cleaned_data_df.columns if x[1:] in plot_cows]
+        cleaned_data_df = cleaned_data_df[new_columns]
+    else:
+        cleaned_data_df = cleaned_data_df.iloc[:,6:]
 
     # convert to fill data if requested
     if fill_flag:
         cleaned_data_df = convert_cleaned_to_fill(cleaned_data_df)
 
-    # # isolate days to plot
-    # daily_data = {}
-    # # import data from excel for each date
-    # for date_str, data in all_data.items():
-    #     if date_str in date_set:
-    #         # add to date_df
-    #         daily_data[date_str] = data
-
+    # select days to plot
     daily_data = {}
     for date_str in date_set:
         date_time_obj = datetime.strptime(date_str, "%d-%b-%Y")
         new_date_str = date_time_obj.strftime("%Y-%m-%d")
-        print(new_date_str)
-
-        daily_data[date_str] = cleaned_data_df[cleaned_data_df["AEST_Date"]==new_date_str]
-
-    print(daily_data)
+        df_temp = cleaned_data_df[cleaned_data_df["AEST_Date"]==new_date_str]
+        df_temp = df_temp.reset_index()
+        df_temp = df_temp.drop(columns=["index", "AEST_Date", "AEST_Time"])
+        daily_data[date_str] = df_temp
 
     # define x-axis
     x_axis = list(range(1, 25))
