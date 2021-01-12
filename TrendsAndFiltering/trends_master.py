@@ -25,8 +25,8 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 # plot_cows = [str(x) for x in coat_dict["Black"]]
 
 # or we can manually select cattle
-cow_category = "8027107 - White, 50%, F"
-plot_cows = ['8027107']
+# cow_category = "8027107 - White, 50%, F"
+# plot_cows = ['8027107']
 # cow_category = "8022092 - Red, 39%, F"
 # plot_cows = ['8022092']
 
@@ -50,7 +50,8 @@ state_indeces = [4]
 
 ########### HOT VS NON-HOT DAY TRENDS #############
 
-#ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_indeces, True)
+ave_day_heat, ave_day_other = hot_day_trends(plot_cows, cow_category, state_indeces, True)
+#ave_day_heat, ave_day_other = hot_day_clean_trends(plot_cows, cow_category, state_indeces, True)
 # extrapolate to length of signal
 #hot_days_ex, other_days_ex = extrapolate_heat(int(len(signal)/24), ave_day_heat, ave_day_other)
 
@@ -59,9 +60,9 @@ state_indeces = [4]
 
 ############### SINGLE DAY ANALYSIS ################
 
-signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
+#signal = single_day_trends(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
 #signal = single_day_trends_clean(plot_cows, cow_category, state_indeces, date_set, plot_consecutive, True)
-hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
+#hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecutive, True)
 #hot_days = single_day_trends_clean(None, "All", state_indeces, date_set, plot_consecutive, True)
 #other_days = single_day_trends(None, "All", state_indeces, total_date_list[24:28], plot_consecutive)
 
@@ -85,8 +86,8 @@ hot_days = single_day_trends(None, "All", state_indeces, date_set, plot_consecut
 # fil_lp_filter([4], [7], hot_days, 'All')
 
 # IIR LP
-filtered_signal = butter_lp_filter([4], [4], signal, cow_category)
-filtered_herd = butter_lp_filter([4], [4], hot_days, 'All')
+#filtered_signal = butter_lp_filter([4], [4], signal, cow_category)
+#filtered_herd = butter_lp_filter([4], [4], hot_days, 'All')
 
 ####################################################
 

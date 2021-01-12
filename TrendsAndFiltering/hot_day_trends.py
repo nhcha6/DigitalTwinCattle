@@ -10,6 +10,7 @@ from average_24hr import *
 data_dir = '/Users/nicolaschapman/Documents/DigitalTwinCattle/DigitalTwinCattle/TrendsAndFiltering/HeatData/csvs_brisbane_18_10_18__2_1_19_tags/'
 file_name = 'DailyCowStates_Brisbane Valley Feedlot_'
 animal_info_name = 'Cow_ID.csv'
+clean_data_dir = "Oct18-Jan1 Cleaned/AllInOne_2018Oct18to2019Jan01.csv"
 
 # definitions of state
 state_data = {0: "side lying",
@@ -101,3 +102,57 @@ def hot_day_trends(plot_cows, cow_category, state_indeces, fill_flag):
     # return the data of the most recent state run
     return ave_day_heat, ave_day_other
 
+def hot_day_clean_trends(plot_cows, cow_category, state_indeces, fill_flag):
+    # split into hot data and other data
+    heat_data = {}
+    other_data = {}
+    all_data = {}
+
+    # import clean data
+    cleaned_data_df = pd.read_csv(clean_data_dir)
+    # select only relevant cows
+    if plot_cows:
+        new_columns = ["AEST_Date", "AEST_Time"] + [x for x in cleaned_data_df.columns if x[1:] in plot_cows]
+        cleaned_data_df = cleaned_data_df[new_columns]
+    else:
+        cleaned_data_df = cleaned_data_df.iloc[:,6:]
+
+    # convert to fill data if requested
+    if fill_flag:
+        cleaned_data_df = convert_cleaned_to_fill(cleaned_data_df)
+
+    # select days to plot
+    for date in total_date_list:
+        date_str = date.strftime("%d-%b-%Y")
+        new_date_str = date.strftime("%Y-%m-%d")
+        df_temp = cleaned_data_df[cleaned_data_df["AEST_Date"]==new_date_str]
+        df_temp = df_temp.reset_index()
+        df_temp = df_temp.drop(columns=["index", "AEST_Date", "AEST_Time"])
+        if date_str in hot_date_set:
+            heat_data[date_str] = df_temp
+        else:
+            other_data[date_str] = df_temp
+
+    # define states to run and default x_axis
+    x_axis = list(range(1,25))
+
+    # create plots for each state
+    for state_index in state_indeces:
+        print("Plotting for " + str(state_data[state_index]))
+        # calculate the average day for each dataset
+        ave_day_other = average_day(other_data, state_index)
+        print("First dataset complete")
+        ave_day_heat = average_day(heat_data, state_index)
+        print("Second dataset complete")
+
+        # plot the two data sets
+        plt.figure()
+        plt.plot(x_axis,ave_day_other, label="other")
+        plt.plot(x_axis,ave_day_heat, label="hot")
+        plt.legend(loc="upper right")
+        plt.title("Average time spent " + str(state_data[state_index]) + " (" + cow_category + " 19-Oct-18 to 1-Jan-19)", fontsize=10)
+        plt.xlabel("Hour of the Day")
+        plt.ylabel("Average minutes " + str(state_data[state_index]) + " per hour")
+
+    # return the data of the most recent state run
+    return ave_day_heat, ave_day_other
