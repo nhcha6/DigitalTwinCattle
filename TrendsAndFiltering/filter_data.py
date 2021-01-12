@@ -132,10 +132,11 @@ def fil_lp_filter(cutoff_hz_list, width_hz_list, signal, signal_name):
 
     return filtered_signal[int(delay*24):]
 
-def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name):
+def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name, plot=True):
     i = 0
-    plt.figure(figsize=(len(order_list) * 5, len(cutoff_hz_list) * 2))
-    plt.suptitle("Low Pass IIR vs Unfiltered Signal (" + signal_name + ")")
+    if plot:
+        plt.figure(figsize=(len(order_list) * 5, len(cutoff_hz_list) * 2))
+        plt.suptitle("Low Pass IIR vs Unfiltered Signal (" + signal_name + ")")
     for fc in cutoff_hz_list:
         for order in order_list:
             i+=1
@@ -147,14 +148,14 @@ def butter_lp_filter(cutoff_hz_list, order_list, signal, signal_name):
             b, a = butter(order, wc, 'low')
             filtered_signal = filtfilt(b,a,signal)
 
-            plt.subplot(len(cutoff_hz_list), len(order_list), i)
-            plt.plot(t, signal, label='signal')
-            plt.plot(t, filtered_signal, 'r-',  label='low_pass')
+            if plot:
+                plt.subplot(len(cutoff_hz_list), len(order_list), i)
+                plt.plot(t, signal, label='signal')
+                plt.plot(t, filtered_signal, 'r-',  label='low_pass')
 
-            plt.xlabel('days')
-            plt.title('Cutoff = ' + str(fc) + 'Hz, Order = ' + str(order), fontsize=10)
-            plt.grid()
-            plt.tight_layout()
+                plt.xlabel('days')
+                plt.title('Cutoff = ' + str(fc) + 'Hz, Order = ' + str(order), fontsize=10)
+                plt.grid()
+                plt.tight_layout()
 
     return filtered_signal
-
