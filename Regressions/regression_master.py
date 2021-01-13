@@ -58,8 +58,8 @@ date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[1:-1]]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [8]
-cutoff = 3
+state_indeces = [1]
+cutoff = 4.5
 
 ##################################################################
 

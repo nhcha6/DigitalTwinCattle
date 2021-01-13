@@ -7,29 +7,100 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, r2_score
 from filter_data import *
+from pandas.plotting import autocorrelation_plot
 
-def build_test_data(lower, upper, rows):
+def build_prev_x_data(lower, upper, rows):
     x = []
     y = []
-    for i in range(lower,upper,24):
-        # print(i)
-        [raw_ts, filtered_ts] = rows[[str(j) for j in range(i, i + 103)]].values.tolist()
-        # x_data = time_series[0]+time_series[1]
-        filtered_x = butter_lp_filter([3], [4], raw_ts, "All", False)
-        x_data = [(raw_ts[j]-raw_ts[j-24]) for j in range(24,len(raw_ts))]
-        x_data.extend([(filtered_x[k]-filtered_x[k-24]) for k in range(24,len(filtered_x))])
-        # herd_data = herd_rows[[str(j) for j in range(i,i+31)]].values.tolist()
-        # x_data = x_data + herd_data[1] + herd_data[0]
 
-        y_data = rows.iloc[1][str(i + 104)] - rows.iloc[1][str(i + 80)]
+    horizon = 1
+    lag = 60
 
-        # train to predict area under.
-        # for day in range(0,96,24):
-        #     day_data = rows[[str(j) for j in range(i+day,i+day+24)]].values.tolist()
-        #     x_data.append(sum(day_data[1]))
-        #
-        # next_day_data = rows[[str(j) for j in range(i+96,i+96+24)]].values.tolist()
-        # y_data = sum(next_day_data[1])
+    for i in range(lower,upper,1):
+        # extract section of time series to analyse
+        [raw_ts, filtered_ts] = rows[[str(j) for j in range(i, i + lag)]].values.tolist()
+
+        # filter data
+        filtered_raw = butter_lp_filter([3], [4], raw_ts, "All", False)
+
+        # apply differencing
+        filtered_season_diff = diff(filtered_raw, 24)
+        raw_season_diff = diff(raw_ts, 24)
+        filtered_double_diff = diff(filtered_season_diff, 1)
+        #raw_double_diff = diff(raw_season_diff, 1)
+
+        # declare x_data
+        # original time-series
+        # x_data = raw_ts + filtered_ts
+        # seasonally differenced
+        #x_data = filtered_season_diff# + raw_season_diff
+        # double differenced
+        x_data = filtered_double_diff#+ raw_double_diff
+
+        # extract y-data
+        # original data
+        #y_data = filtered_ts[i+horizon+lag]
+        # seasonal_diff
+        y_data = rows.iloc[1][str(i + horizon + lag - 1)] - rows.iloc[1][str(i + horizon + lag - 25)]
+        # double diff
+        y_prev = rows.iloc[1][str(i + horizon + lag - 2)] - rows.iloc[1][str(i + horizon + lag - 26)]
+        y_data = y_data - y_prev
+
+        # plot some data for testing
+        # plt.plot(filtered_raw[24:])
+        # plt.plot(filtered_season_diff)
+        # plt.plot(raw_ts[24:])
+        # plt.plot(raw_season_diff)
+        # plt.show()
+
+        x.append(x_data)
+        y.append(y_data)
+
+    return x, y
+
+def build_diff_combined_data(lower, upper, rows):
+    x = []
+    y = []
+
+    horizon = 1
+    # 15 days lag to midday
+    lag = 372
+
+    for i in range(lower,upper,1):
+        # extract section of time series to analyse
+        [raw_ts, filtered_ts] = rows[[str(j) for j in range(i, i + lag)]].values.tolist()
+
+        # filter data
+        filtered_raw = butter_lp_filter([3], [4], raw_ts, "All", False)
+
+        # apply differencing
+        filtered_season_diff = diff(filtered_raw, 24)
+        raw_season_diff = diff(raw_ts, 24)
+        filtered_double_diff = diff(filtered_season_diff, 1)
+        raw_double_diff = diff(raw_season_diff, 1)
+
+        # declare x_data
+        # seasonally differenced
+        x_data = [filtered_season_diff[i] for i in range(11+horizon, len(filtered_season_diff),24)]
+        x_data += [raw_season_diff[i] for i in range(11+horizon, len(filtered_season_diff),24)]
+        # double differenced
+        # x_data = filtered_double_diff+ raw_double_diff
+
+        # extract y-data
+        # original data
+        #y_data = filtered_ts[i+horizon+lag]
+        # seasonal_diff
+        y_data = rows.iloc[1][str(i + horizon + lag - 1)] - rows.iloc[1][str(i + horizon + lag - 25)]
+        # double diff
+        # y_prev = rows.iloc[1][str(i + horizon + lag - 2)] - rows.iloc[1][str(i + horizon + lag - 26)]
+        # y_data = y_data - y_prev
+
+        # plot some data for testing
+        # plt.plot(filtered_raw[24:])
+        # plt.plot(filtered_season_diff)
+        # plt.plot(raw_ts[24:])
+        # plt.plot(raw_season_diff)
+        # plt.show()
 
         # if np.isnan(x_data).any():
         #     print("invalid data for " + cow)
@@ -39,6 +110,11 @@ def build_test_data(lower, upper, rows):
         y.append(y_data)
 
     return x, y
+
+def diff(series, lag):
+    log_series=series
+    diff = [(log_series[j]-log_series[j-lag]) for j in range(lag,len(log_series))]
+    return diff
 
 df_panting = pd.read_csv("Clean Dataset Output/panting_timeseries.csv")
 
@@ -62,21 +138,42 @@ counter = 0
 for cow in cow_list:
     counter+=1
     print(counter)
-    print(cow)
+
+    #plot data alterations
+    # if counter in [1]:
+    #     plt.figure()
+    #     test_rows = df_panting.loc[(df_panting["Cow"] == cow)]
+    #     [raw_ts, filtered_ts] = test_rows[[str(j) for j in range(1,1753)]].values.tolist()
+    #     print(filtered_ts)
+    #     seasonal_diff = diff(filtered_ts, 24)
+    #     print(seasonal_diff)
+    #     double_diff = diff(seasonal_diff,1)
+    #     print(double_diff)
+    #     autocorrelation_plot(double_diff)
+    #     plt.figure()
+    #     autocorrelation_plot(seasonal_diff)
+
+        # plt.plot(double_diff)
+        # plt.plot(filtered_ts)
+        # plt.plot(seasonal_diff)
+
+        # plt.show()
 
     if cow=='All':
         continue
 
-    # if counter==2:
-    #     break
+    if counter==50:
+        break
 
     rows = df_panting.loc[(df_panting["Cow"] == cow)]
 
-    x_cow, y_cow = build_test_data(1, 1200, rows)
+    x_cow, y_cow = build_prev_x_data(1, 1200, rows)
+    #x_cow, y_cow = build_diff_combined_data(1, 960, rows)
     x.extend(x_cow)
     y.extend(y_cow)
 
-    x_test_cow, y_test_cow = build_test_data(1200, 1644, rows)
+    x_test_cow, y_test_cow = build_prev_x_data(1200, 1620, rows)
+    #x_test_cow, y_test_cow = build_diff_combined_data(960, 1380, rows)
     x_test.extend(x_test_cow)
     y_test.extend(y_test_cow)
 
