@@ -133,7 +133,8 @@ def build_combined_data(lower, upper, rows):
 
         # declare x_data
         # index of lags to keep: 24 most recent and then every 24th from there
-        x_data = filtered_double_diff[-24:] + [filtered_double_diff[j] for j in range(22,lag-26,24)]
+        #x_data = filtered_double_diff[-24:] + [filtered_double_diff[j] for j in range(22,lag-26,24)]
+        x_data = [filtered_double_diff[j] for j in range(22,lag-25,24)]
 
         # extract y-data
         # original data
@@ -212,15 +213,15 @@ for cow in cow_list:
 
     rows = df_panting.loc[(df_panting["Cow"] == cow)]
 
-    x_cow, y_cow = build_prev_x_data(1, 1200, rows)
+    #x_cow, y_cow = build_prev_x_data(1, 1200, rows)
     #x_cow, y_cow = build_prev_15_data(1, 960, rows)
-    #x_cow, y_cow = build_combined_data(1, 960, rows)
+    x_cow, y_cow = build_combined_data(1, 960, rows)
     x.extend(x_cow)
     y.extend(y_cow)
 
-    x_test_cow, y_test_cow = build_prev_x_data(1200, 1620, rows)
+    #x_test_cow, y_test_cow = build_prev_x_data(1200, 1620, rows)
     #x_test_cow, y_test_cow = build_prev_15_data(960, 1380, rows)
-    #x_test_cow, y_test_cow = build_combined_data(960, 1380, rows)
+    x_test_cow, y_test_cow = build_combined_data(960, 1380, rows)
     x_test.extend(x_test_cow)
     y_test.extend(y_test_cow)
 
