@@ -14,7 +14,7 @@ def build_prev_x_data(lower, upper, rows):
     y = []
 
     horizon = 1
-    lag = 60
+    lag = 26
 
     for i in range(lower,upper,1):
         # extract section of time series to analyse
@@ -24,8 +24,8 @@ def build_prev_x_data(lower, upper, rows):
         filtered_raw = butter_lp_filter([3], [4], raw_ts, "All", False)
 
         # apply differencing
-        filtered_season_diff = diff(filtered_raw, 24)
-        raw_season_diff = diff(raw_ts, 24)
+        filtered_season_diff = diff(filtered_raw, 1)
+        raw_season_diff = diff(raw_ts, 1)
         filtered_double_diff = diff(filtered_season_diff, 1)
         #raw_double_diff = diff(raw_season_diff, 1)
 
@@ -41,9 +41,9 @@ def build_prev_x_data(lower, upper, rows):
         # original data
         #y_data = filtered_ts[i+horizon+lag]
         # seasonal_diff
-        y_data = rows.iloc[1][str(i + horizon + lag - 1)] - rows.iloc[1][str(i + horizon + lag - 25)]
+        y_data = rows.iloc[1][str(i + horizon + lag - 1)] - rows.iloc[1][str(i + horizon + lag - 2)]
         # double diff
-        y_prev = rows.iloc[1][str(i + horizon + lag - 2)] - rows.iloc[1][str(i + horizon + lag - 26)]
+        y_prev = rows.iloc[1][str(i + horizon + lag - 2)] - rows.iloc[1][str(i + horizon + lag - 3)]
         y_data = y_data - y_prev
 
         # plot some data for testing
@@ -58,7 +58,7 @@ def build_prev_x_data(lower, upper, rows):
 
     return x, y
 
-def build_diff_combined_data(lower, upper, rows):
+def build_prev_15_data(lower, upper, rows):
     x = []
     y = []
 
@@ -111,6 +111,51 @@ def build_diff_combined_data(lower, upper, rows):
 
     return x, y
 
+def build_combined_data(lower, upper, rows):
+    x = []
+    y = []
+
+    horizon = 1
+    lag = 360
+
+    for i in range(lower,upper,1):
+        # extract section of time series to analyse
+        [raw_ts, filtered_ts] = rows[[str(j) for j in range(i, i + lag)]].values.tolist()
+
+        # filter data
+        filtered_raw = butter_lp_filter([3], [4], raw_ts, "All", False)
+
+        # apply differencing
+        filtered_season_diff = diff(filtered_raw, 1)
+        #raw_season_diff = diff(raw_ts, 1)
+        filtered_double_diff = diff(filtered_season_diff, 1)
+        #raw_double_diff = diff(raw_season_diff, 1)
+
+        # declare x_data
+        # index of lags to keep: 24 most recent and then every 24th from there
+        x_data = filtered_double_diff[-24:] + [filtered_double_diff[j] for j in range(22,lag-26,24)]
+
+        # extract y-data
+        # original data
+        #y_data = filtered_ts[i+horizon+lag]
+        # seasonal_diff
+        y_data = rows.iloc[1][str(i + horizon + lag - 1)] - rows.iloc[1][str(i + horizon + lag - 2)]
+        # double diff
+        y_prev = rows.iloc[1][str(i + horizon + lag - 2)] - rows.iloc[1][str(i + horizon + lag - 3)]
+        y_data = y_data - y_prev
+
+        # plot some data for testing
+        # plt.plot(filtered_raw[24:])
+        # plt.plot(filtered_season_diff)
+        # plt.plot(raw_ts[24:])
+        # plt.plot(raw_season_diff)
+        # plt.show()
+
+        x.append(x_data)
+        y.append(y_data)
+
+    return x, y
+
 def diff(series, lag):
     log_series=series
     diff = [(log_series[j]-log_series[j-lag]) for j in range(lag,len(log_series))]
@@ -145,19 +190,19 @@ for cow in cow_list:
     #     test_rows = df_panting.loc[(df_panting["Cow"] == cow)]
     #     [raw_ts, filtered_ts] = test_rows[[str(j) for j in range(1,1753)]].values.tolist()
     #     print(filtered_ts)
-    #     seasonal_diff = diff(filtered_ts, 24)
+    #     seasonal_diff = diff(raw_ts, 1)
     #     print(seasonal_diff)
     #     double_diff = diff(seasonal_diff,1)
     #     print(double_diff)
     #     autocorrelation_plot(double_diff)
     #     plt.figure()
     #     autocorrelation_plot(seasonal_diff)
-
-        # plt.plot(double_diff)
-        # plt.plot(filtered_ts)
-        # plt.plot(seasonal_diff)
-
-        # plt.show()
+    #
+    #     # plt.plot(double_diff)
+    #     # plt.plot(filtered_ts)
+    #     # plt.plot(seasonal_diff)
+    #
+    #     plt.show()
 
     if cow=='All':
         continue
@@ -168,12 +213,14 @@ for cow in cow_list:
     rows = df_panting.loc[(df_panting["Cow"] == cow)]
 
     x_cow, y_cow = build_prev_x_data(1, 1200, rows)
-    #x_cow, y_cow = build_diff_combined_data(1, 960, rows)
+    #x_cow, y_cow = build_prev_15_data(1, 960, rows)
+    #x_cow, y_cow = build_combined_data(1, 960, rows)
     x.extend(x_cow)
     y.extend(y_cow)
 
     x_test_cow, y_test_cow = build_prev_x_data(1200, 1620, rows)
-    #x_test_cow, y_test_cow = build_diff_combined_data(960, 1380, rows)
+    #x_test_cow, y_test_cow = build_prev_15_data(960, 1380, rows)
+    #x_test_cow, y_test_cow = build_combined_data(960, 1380, rows)
     x_test.extend(x_test_cow)
     y_test.extend(y_test_cow)
 
