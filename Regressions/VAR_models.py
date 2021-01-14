@@ -255,17 +255,17 @@ data_type_list = sorted(data_type_list)
 # filtered_data_generation(df_panting)
 
 # basic autoregression of filtered data
-#run_single_cow_AR(cow_list, panting_df, 108, 12)
+#run_single_cow_AR(cow_list, panting_df, 108, 6)
 
 # concatenate timeseries
-run_concat_cow_AR(panting_df, cow_list, 36, 12)
+#run_concat_cow_AR(panting_df, cow_list, 36, 12)
 
 # not using difference in difference
 # indivual_AR_original_signal(panting_df, cow_list, 36, 12)
 
 # for testing multiple lags and horizons
-# for lag in [96, 108,120,132,144]:
-#     for horizon in [12]:
-#         print("lag: " + str(lag))
-#         run_single_cow_AR(cow_list, panting_df, lag, horizon)
+for lag in [24, 96, 108,120,132,144]:
+    for horizon in [6]:
+        print("lag: " + str(lag))
+        run_single_cow_AR(cow_list, panting_df, lag, horizon)
 
