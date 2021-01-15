@@ -11,7 +11,7 @@ from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tools.eval_measures import rmse, aic
 from filter_data import *
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 
 def diff(series, lag):
     log_series=series
@@ -112,7 +112,51 @@ def single_cow_AR(series, lags, error_horizon):
 
     return error, forecast
 
-def run_concat_cow_AR(df_panting, cows, lags, error_horizon):
+def run_single_cow_AR(cows, df_panting, lag, horizon, train_size, plot_forecast):
+    all_errors = []
+    original_errors = []
+    counter = 0
+    for cow in cows:
+        counter += 1
+
+        filtered_panting = df_panting[(df_panting["Cow"] == cow) & (df_panting["Data Type"] == "panting filtered")]
+        filtered_panting = filtered_panting[[str(j) for j in range(1, train_size)]].values.tolist()[0]
+        differenced = diff(filtered_panting, 1)
+        double_diff = diff(differenced, 1)
+
+        error, forecast = single_cow_AR(double_diff, lag, horizon)
+        all_errors.append(error)
+
+        #recreate original sequence prediction and compare to the actual data
+        init_i = [differenced[-25]]
+        init_ii = [filtered_panting[-26]]
+        forecast_i = inverse_diff(forecast, init_i,1)
+        forecast_ii = inverse_diff(forecast_i, init_ii, 1)
+
+        original_error = mean_squared_error(filtered_panting[-24:-24+horizon], forecast_ii[-24:-24+horizon], squared=False)
+        max_val = max(filtered_panting[-24:-24+horizon])
+        #norm_orig_error = mean_absolute_percentage_error(filtered_panting[-24:-24+horizon], forecast_ii[-24:-24+horizon])
+        norm_orig_error = original_error/max_val
+        # print(original_error)
+        if max_val>1:
+            original_errors.append(norm_orig_error)
+
+        if plot_forecast:
+            print(norm_orig_error)
+            plt.plot(filtered_panting[-30:-24] + forecast_ii[-24:],label='forecast')
+            plt.plot(filtered_panting[-30:], label='actual')
+            plt.axvline(x=5, c='r')
+            plt.legend()
+            plt.show()
+
+    print("Norm RMSE: " + str(np.mean(original_errors)))
+    # plt.figure()
+    # plt.plot(norm_original_errors)
+    # plt.show()
+
+    return np.mean(original_errors)
+
+def run_concat_cow_AR(df_panting, cows, lags, error_horizon, train_size, plot_forecast):
     new_series = []
     test = []
     predict_ts = []
@@ -126,7 +170,7 @@ def run_concat_cow_AR(df_panting, cows, lags, error_horizon):
             continue
         # extract all values except the last 18
         filtered_panting = df_panting[(df_panting["Cow"] == cow) & (df_panting["Data Type"] == "panting filtered")]
-        filtered_panting = filtered_panting[[str(j) for j in range(1, 1735)]].values.tolist()[0]
+        filtered_panting = filtered_panting[[str(j) for j in range(1, train_size)]].values.tolist()[0]
         differenced = diff(filtered_panting, 1)
         double_diff = diff(differenced, 1)
         # all but last 24 (which we will predict) added to new series
@@ -148,8 +192,8 @@ def run_concat_cow_AR(df_panting, cows, lags, error_horizon):
     count = 0
     errors = []
     orig_errors = []
-    # to forecast the next 24 hour of each animal, we must loop throught the concatenated data.
-    for i in range(1708, 338184, 1708):
+    # to forecast the next 24 hour of each animal, we must loop through the concatenated data.
+    for i in range(train_size-27, len(new_series), train_size-27):
         # forecast
         forecast = res.predict(i, i + 23, dynamic=True)
         # RMSE
@@ -168,10 +212,17 @@ def run_concat_cow_AR(df_panting, cows, lags, error_horizon):
         forecast_i = inverse_diff(forecast, [init_i[count]], 1)
         forecast_ii = inverse_diff(forecast_i, [init_ii[count]], 1)
 
-        orig_error = mean_squared_error(forecast_ii[-24:-24+error_horizon], predict_ts[count][-24:-24+error_horizon])
+        orig_error = mean_squared_error(forecast_ii[-24:-24+error_horizon], predict_ts[count][-24:-24+error_horizon], squared=False)
+        #norm_orig_error = mean_absolute_percentage_error(predict_ts[count][-24:-24+error_horizon], forecast_ii[-24:-24+error_horizon])
+        max_val = max(predict_ts[count][-24:-24+error_horizon])
+        norm_orig_error = orig_error/max_val
+
+        if max_val>1:
+            orig_errors.append(norm_orig_error)
 
         # plot forecast of original data
-        if False:
+        if plot_forecast:
+            print(norm_orig_error)
             plt.figure()
             plt.plot(predict_ts[count][0:6] + forecast_ii[-24:], label='forecast')
             plt.plot(predict_ts[count], label='actual')
@@ -182,42 +233,12 @@ def run_concat_cow_AR(df_panting, cows, lags, error_horizon):
         # update variables
         count += 1
         errors.append(error)
-        orig_errors.append(orig_error)
 
-    print("Mean RMSE: " + str(np.mean(orig_errors)))
+
+    print("Norm RMSE: " + str(np.mean(orig_errors)))
     plt.show()
 
-def run_single_cow_AR(cows, df_panting, lag, horizon):
-    all_errors = []
-    original_errors = []
-    counter = 0
-    for cow in cows:
-        counter += 1
-
-        filtered_panting = df_panting[(df_panting["Cow"] == cow) & (df_panting["Data Type"] == "panting filtered")]
-        filtered_panting = filtered_panting[[str(j) for j in range(1, 1735)]].values.tolist()[0]
-        differenced = diff(filtered_panting, 1)
-        double_diff = diff(differenced, 1)
-
-        error, forecast = single_cow_AR(double_diff, lag, horizon)
-        all_errors.append(error)
-
-        #recreate original sequence prediction and compare to the actual data
-        init_i = [differenced[-25]]
-        init_ii = [filtered_panting[-26]]
-        forecast_i = inverse_diff(forecast, init_i,1)
-        forecast_ii = inverse_diff(forecast_i, init_ii, 1)
-
-        original_errors.append(mean_squared_error(filtered_panting[-24:-24+horizon], forecast_ii[-24:-24+horizon]))
-
-        # plt.plot(filtered_panting[-30:-24] + forecast_ii[-24:],label='forecast')
-        # plt.plot(filtered_panting[-30:], label='actual')
-        # plt.axvline(x=5, c='r')
-        # plt.legend()
-        # plt.show()
-
-    print("Mean RMSE: " + str(np.mean(original_errors)))
-    plt.show()
+    return np.mean(orig_errors)
 
 def indivual_AR_original_signal(df_panting, cow_list, lag, horizon):
     errors = []
@@ -237,6 +258,39 @@ def indivual_AR_original_signal(df_panting, cow_list, lag, horizon):
 
     print("Mean RMSE: " + str(np.mean(errors)))
 
+# for testing multiple lags and horizons
+def error_plot(horizon, single_model=True):
+    error_list = []
+    lag_list = []
+
+    # spread over entire series
+    iter_list = [i for i in range(271, 1736, 24)]
+    # spread over entire day
+    #iter_list = [i for i in range(655, 655+72, 1)]
+
+    for train_size in iter_list:
+        print("train size: " + str(train_size))
+        min_error = 1000
+        min_lag = 0
+        for lag in [24, 48, 72, 96, 120]:
+            print("lag " + str(lag))
+            # calculate error for given model
+            if single_model:
+                error = run_single_cow_AR(cow_list, panting_df, lag, horizon, train_size, False)
+            else:
+                error = run_concat_cow_AR(panting_df, cow_list, lag, horizon, train_size, False)
+
+            if error < min_error:
+                min_error = error
+                min_lag = lag
+        error_list.append(min_error)
+        lag_list.append(min_lag)
+
+    plt.plot(error_list)
+    plt.figure()
+    plt.plot(lag_list)
+    plt.show()
+
 # import data
 panting_df = pd.read_csv("Clean Dataset Output/panting_timeseries.csv")
 
@@ -255,17 +309,12 @@ data_type_list = sorted(data_type_list)
 # filtered_data_generation(df_panting)
 
 # basic autoregression of filtered data
-#run_single_cow_AR(cow_list, panting_df, 108, 6)
+# run_single_cow_AR(cow_list, panting_df, 48, 23, 1735, False)
 
 # concatenate timeseries
-#run_concat_cow_AR(panting_df, cow_list, 36, 12)
+#run_concat_cow_AR(panting_df, cow_list, 60, 24, 1735, True)
 
 # not using difference in difference
 # indivual_AR_original_signal(panting_df, cow_list, 36, 12)
 
-# for testing multiple lags and horizons
-for lag in [24, 96, 108,120,132,144]:
-    for horizon in [6]:
-        print("lag: " + str(lag))
-        run_single_cow_AR(cow_list, panting_df, lag, horizon)
-
+error_plot(23, True)
