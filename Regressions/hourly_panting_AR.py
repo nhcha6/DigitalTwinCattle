@@ -312,9 +312,9 @@ data_type_list = sorted(data_type_list)
 # run_single_cow_AR(cow_list, panting_df, 48, 23, 1735, False)
 
 # concatenate timeseries
-#run_concat_cow_AR(panting_df, cow_list, 60, 24, 1735, True)
+run_concat_cow_AR(panting_df, cow_list, 60, 23, 1735, True)
 
 # not using difference in difference
 # indivual_AR_original_signal(panting_df, cow_list, 36, 12)
 
-error_plot(23, True)
+#error_plot(23, True)
