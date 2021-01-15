@@ -13,6 +13,11 @@ from statsmodels.tools.eval_measures import rmse, aic
 from filter_data import *
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 
+def diff(series, lag):
+    log_series=series
+    diff = [(log_series[j]-log_series[j-lag]) for j in range(lag,len(log_series))]
+    return diff
+
 def compute_daily_timeseries(cows, df):
     daily_timeseries_list = []
     for cow in cows:
@@ -93,6 +98,10 @@ def run_concat_cow_AR(daily_series, lags, error_horizon, train_size, plot_foreca
     mod = AutoReg(new_series, lags, old_names=False)
     res = mod.fit()
     # print(res.summary())
+    # forecast = res.predict()
+    # plt.plot(forecast)
+    # plt.plot(new_series)
+    # plt.show()
 
     # test each series
     count = 0
@@ -130,6 +139,32 @@ def run_concat_cow_AR(daily_series, lags, error_horizon, train_size, plot_foreca
 
     return np.mean(errors)
 
+
+# run_single_cow_AR(panting_daily_ts, 21, 2, 60, False)
+def error_plots(horizon):
+    errors = []
+    lags = []
+    for train_size in [i for i in range(20, 74)]:
+        min_error = 1000
+        min_lag = 0
+
+        for lag in [2, 5, 10, 20, 30, 35]:
+            if lag / train_size > 0.5:
+                continue
+            # print("Lag: " + str(lag))
+            print("Train Size: " + str(train_size))
+            error = run_concat_cow_AR(panting_daily_ts, lag, horizon, train_size, False)
+            if error < min_error:
+                min_error = error
+                min_lag = lag
+        errors.append(error)
+        lags.append(min_lag)
+
+    plt.plot(errors)
+    plt.figure()
+    plt.plot(lags)
+    plt.show()
+
 # import data
 panting_df = pd.read_csv("Clean Dataset Output/panting_timeseries.csv")
 
@@ -143,9 +178,14 @@ data_type_list = sorted(data_type_list)
 
 panting_daily_ts = compute_daily_timeseries(cow_list, panting_df)
 
-# run_single_cow_AR(panting_daily_ts, 21, 2, 60, False)
+mean_diffs = []
+for i in range(18,73):
+    diffs = []
+    for series in panting_daily_ts:
+        difference = series[i]-series[i-1]
+        diffs.append(difference)
+    mean_diffs.append(np.mean([abs(x) for x in diffs]))
+plt.plot(mean_diffs)
+plt.show()
 
-for lag in [2,5,10,20,30,35,40]:
-    print('Lag: ' + str(lag))
-    run_concat_cow_AR(panting_daily_ts, lag, 1, 61, False)
-
+#run_concat_cow_AR(panting_daily_ts, 10, 1, 73, False)
