@@ -12,6 +12,7 @@ from statsmodels.tsa.stattools import grangercausalitytests
 import warnings
 import math
 import random
+import csv
 
 warnings.filterwarnings("ignore")
 
@@ -137,9 +138,10 @@ def run_single_cow_AR(cows, df_panting, lag, horizon, train_size, plot_forecast)
 
     return np.mean(original_errors)
 
-def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, herd=False):
+def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, df_weather = None):
     combined_df = pd.concat([df for df in df_list])
     errors = []
+    prev_cow = '8048118'
     for cow in cows:
         if cow == 'All':
             continue
@@ -148,17 +150,33 @@ def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, her
         VAR_df = cow_df.loc[cow_df['Data Type'].isin(model_data)]
 
         # include herd data
-        if herd:
+        if 'herd' in model_data:
             all_df = combined_df[combined_df["Cow"] == "All"]
-            all_df = all_df.loc[all_df['Data Type']=='panting filtered']
-            all_df["Data Type"] = all_df["Data Type"] + ' herd'
+            all_df = all_df.loc[all_df['Data Type'] == 'panting filtered']
+            all_df["Data Type"] = 'herd'
             VAR_df = pd.concat([VAR_df, all_df])
+        if 'prev' in model_data:
+            all_df = combined_df[combined_df["Cow"] == prev_cow]
+            all_df = all_df.loc[all_df['Data Type'] == 'panting filtered']
+            all_df["Data Type"] = 'prev'
+            VAR_df = pd.concat([VAR_df, all_df])
+            prev_cow = cow
 
         # diff series
         new_col = VAR_df["Data Type"]
         VAR_df = VAR_df.transpose()
         VAR_df.columns = new_col
         VAR_df = VAR_df.iloc[2:,:]
+
+        # add weather data if selected
+        if 'HLI' in model_data:
+            VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+            VAR_df = VAR_df.drop(['Time', 'Date', 'THI'],axis=1)
+        # add weather data if selected
+        if 'THI' in model_data:
+            VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+            VAR_df = VAR_df.drop(['Time', 'Date', 'HLI'], axis=1)
+
         VAR_d_df = VAR_df.diff().dropna()
         VAR_dd_df = VAR_d_df.diff().dropna()
         # split to test and train
@@ -214,6 +232,218 @@ def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, her
     print("Mean RMSE: " + str(mean_error))
     return mean_error
 
+def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False, df_weather=None):
+    combined_df = pd.concat([df for df in df_list])
+    errors = []
+    prev_cow = '8048118'
+    for cow in cows:
+        if cow == 'All':
+            continue
+
+        cow_df = combined_df[combined_df["Cow"] == cow]
+
+        forecast_list = []
+        for model_data in models:
+
+            VAR_df = cow_df.loc[cow_df['Data Type'].isin(model_data)]
+
+            # include herd data
+            if 'herd' in model_data:
+                all_df = combined_df[combined_df["Cow"] == "All"]
+                all_df = all_df.loc[all_df['Data Type']=='panting filtered']
+                all_df["Data Type"] = all_df["Data Type"] + ' herd'
+                VAR_df = pd.concat([VAR_df, all_df])
+            if 'prev' in model_data:
+                all_df = combined_df[combined_df["Cow"] == prev_cow]
+                all_df = all_df.loc[all_df['Data Type'] == 'panting filtered']
+                all_df["Data Type"] = all_df["Data Type"] + ' herd'
+                VAR_df = pd.concat([VAR_df, all_df])
+                prev_cow = cow
+
+            # diff series
+            new_col = VAR_df["Data Type"]
+            VAR_df = VAR_df.transpose()
+            VAR_df.columns = new_col
+            VAR_df = VAR_df.iloc[2:,:]
+
+            # add weather data if selected
+            if 'HLI' in model_data:
+                VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+                VAR_df = VAR_df.drop(['Time', 'Date', 'THI'], axis=1)
+            # add weather data if selected
+            if 'THI' in model_data:
+                VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+                VAR_df = VAR_df.drop(['Time', 'Date', 'HLI'], axis=1)
+
+            VAR_d_df = VAR_df.diff().dropna()
+            VAR_dd_df = VAR_d_df.diff().dropna()
+            # split to test and train
+            train_diff_df = VAR_dd_df.iloc[0:train_size-2,:].astype(float)
+            test_diff_df = VAR_dd_df.iloc[train_size-2:train_size+22,:].astype(float)
+            train_df = VAR_df.iloc[0:train_size,:]
+            test_df = VAR_df.iloc[train_size:train_size+24,:]
+
+            # run causality test
+            if False:
+                grangers_df = grangers_causation_matrix(VAR_dd_df, model_data)
+                print(grangers_df.to_string())
+
+            # create model
+            model = VAR(train_diff_df)
+            result = model.fit(lag)
+
+            # forecast result
+            forecast_input = train_diff_df.values[-lag:]
+            forecast = result.forecast(y=forecast_input, steps=24)
+
+            # rebuild input
+            df_forecast = pd.DataFrame(forecast, index=test_diff_df.index, columns=test_diff_df.columns+'_2d')
+            df_forecast = invert_transformation(train_df, df_forecast, True)
+            plot_var = model_data[0]
+
+            forecast_list.append(df_forecast[plot_var + "_forecast"].values)
+
+        # average all lists
+        average_forecast = [np.mean(x) for x in zip(*forecast_list)]
+
+        # calculate RMSE
+        error = mean_squared_error(test_df[plot_var].iloc[0:horizon], average_forecast[0:horizon], squared=False)
+        max_val = max(test_df[plot_var])
+        # norm_orig_error = mean_absolute_percentage_error(filtered_panting[-24:-24+horizon], forecast_ii[-24:-24+horizon])
+        norm_error = error / max_val
+        # print(original_error)
+        if max_val > 1:
+            errors.append(norm_error)
+
+        # if True plot
+        if plot:
+            # plt.figure()
+            # plt.plot(df_forecast[plot_var + "_2d"], label='forecast')
+            # plt.plot(test_diff_df[plot_var], label='actual')
+            # plt.legend()
+            print(norm_error)
+            plt.figure()
+            plt.title(plot_var)
+            plt.plot(average_forecast, label='forecast')
+            plt.plot(test_df[plot_var], label='actual')
+            plt.legend()
+            plt.show()
+
+    # return the mean error
+    mean_error = np.mean(errors)
+    print("Mean RMSE: " + str(mean_error))
+    return mean_error
+
+def run_VAR_averaged_frequency(df_list, models, cows, train_size, lag, horizon, plot=False, df_weather=None):
+    combined_df = pd.concat([df for df in df_list])
+    errors = []
+    prev_cow = '8048118'
+    false_pos = 0
+    false_neg = 0
+    total_pos = 0
+    total_neg = 0
+    for cow in cows:
+        if cow == 'All':
+            continue
+
+        cow_df = combined_df[combined_df["Cow"] == cow]
+
+        forecast_list = []
+        for model_data in models:
+
+            VAR_df = cow_df.loc[cow_df['Data Type'].isin(model_data)]
+
+            # include herd data
+            if 'herd' in model_data:
+                all_df = combined_df[combined_df["Cow"] == "All"]
+                all_df = all_df.loc[all_df['Data Type']=='panting filtered']
+                all_df["Data Type"] = all_df["Data Type"] + ' herd'
+                VAR_df = pd.concat([VAR_df, all_df])
+            if 'prev' in model_data:
+                all_df = combined_df[combined_df["Cow"] == prev_cow]
+                all_df = all_df.loc[all_df['Data Type'] == 'panting filtered']
+                all_df["Data Type"] = all_df["Data Type"] + ' herd'
+                VAR_df = pd.concat([VAR_df, all_df])
+                prev_cow = cow
+
+            # diff series
+            new_col = VAR_df["Data Type"]
+            VAR_df = VAR_df.transpose()
+            VAR_df.columns = new_col
+            VAR_df = VAR_df.iloc[2:,:]
+
+            # add weather data if selected
+            if 'HLI' in model_data:
+                VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+                VAR_df = VAR_df.drop(['Time', 'Date', 'THI'], axis=1)
+            # add weather data if selected
+            if 'THI' in model_data:
+                VAR_df = VAR_df.join(df_weather.set_index(VAR_df.index))
+                VAR_df = VAR_df.drop(['Time', 'Date', 'HLI'], axis=1)
+
+            VAR_d_df = VAR_df.diff().dropna()
+            VAR_dd_df = VAR_d_df.diff().dropna()
+            # split to test and train
+            train_diff_df = VAR_dd_df.iloc[0:train_size-2,:].astype(float)
+            test_diff_df = VAR_dd_df.iloc[train_size-2:train_size+22,:].astype(float)
+            train_df = VAR_df.iloc[0:train_size,:]
+            test_df = VAR_df.iloc[train_size:train_size+24,:]
+
+            # run causality test
+            if False:
+                grangers_df = grangers_causation_matrix(VAR_dd_df, model_data)
+                print(grangers_df.to_string())
+
+            # create model
+            model = VAR(train_diff_df)
+            result = model.fit(lag)
+
+            # forecast result
+            forecast_input = train_diff_df.values[-lag:]
+            forecast = result.forecast(y=forecast_input, steps=24)
+
+            # rebuild input
+            df_forecast = pd.DataFrame(forecast, index=test_diff_df.index, columns=test_diff_df.columns+'_2d')
+            df_forecast = invert_transformation(train_df, df_forecast, True)
+            plot_var = model_data[0]
+
+            forecast_list.append(df_forecast[plot_var + "_forecast"].values)
+
+        # average all lists
+        average_forecast = [np.mean(x) for x in zip(*forecast_list)]
+        freq_forecast = sum(average_forecast[0:18]) + sum(train_df[plot_var].iloc[-6:])
+        freq_actual = sum(test_df[plot_var].iloc[0:18]) + sum(train_df[plot_var].iloc[-6:])
+
+        if freq_actual > 100:
+            total_pos += 1
+            if freq_forecast < 100:
+                plot = True
+                false_neg +=1
+        else:
+            total_neg += 1
+            if freq_forecast > 100:
+                plot = True
+                false_pos += 1
+
+        # if True plot
+        if plot:
+            # plt.figure()
+            # plt.plot(df_forecast[plot_var + "_2d"], label='forecast')
+            # plt.plot(test_diff_df[plot_var], label='actual')
+            # plt.legend()
+            print(freq_actual)
+            print(freq_forecast)
+            plt.figure()
+            plt.title(plot_var)
+            plt.plot(average_forecast, label='forecast')
+            plt.plot(test_df[plot_var], label='actual')
+            plt.legend()
+            plt.show()
+            plot = False
+    print("false pos: " + str(false_pos/total_neg))
+    print("false neg: " + str(false_neg/total_pos))
+    return 1
+
 # for testing multiple lags and horizons
 def error_plot(horizon):
     error_list = []
@@ -246,14 +476,14 @@ def error_plot(horizon):
     plt.plot(lag_list)
     plt.show()
 
-# for testing multiple lags and horizons
+# for testing multiple models
 def error_random_test(horizon, header_list, df_panting, cows):
     sizes = []
     train_size = 246
-    train_size += random.randint(1, 400)
+    train_size += random.randint(1, 600)
     while train_size < 1710:
         sizes.append(train_size)
-        train_size += random.randint(1, 400)
+        train_size += random.randint(1, 600)
 
     all_errors = []
     rows = []
@@ -267,7 +497,7 @@ def error_random_test(horizon, header_list, df_panting, cows):
             print("lag " + str(lag))
 
             # calculate error for given model
-            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False)
+            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False, weather_df)
             error_list.append(error)
 
         error_list.append(np.mean(error_list))
@@ -298,19 +528,19 @@ def error_random_test(horizon, header_list, df_panting, cows):
 
     return errors_df
 
-# for testing multiple lags and horizons
-def herd_error_random_test(horizon, header_list, df_panting, cows):
+# for testing multiple models when average data is to be included
+def average_error_random_test(horizon, header_list):
     sizes = []
     train_size = 246
-    train_size += random.randint(1, 800)
+    train_size += random.randint(1, 600)
     while train_size < 1710:
         sizes.append(train_size)
-        train_size += random.randint(1, 800)
+        train_size += random.randint(1, 600)
 
     all_errors = []
     rows = []
     for data in header_list:
-        print('\n'+data)
+        print('\n'+str(data))
         error_list = []
 
         for train_size in sizes:
@@ -319,7 +549,7 @@ def herd_error_random_test(horizon, header_list, df_panting, cows):
             print("lag " + str(lag))
 
             # calculate error for given model
-            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False)
+            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False, weather_df)
             error_list.append(error)
 
         error_list.append(np.mean(error_list))
@@ -327,57 +557,72 @@ def herd_error_random_test(horizon, header_list, df_panting, cows):
         rows.append(data[-1])
         print('Mean of mean RMSE: ' + str(np.mean(error_list)))
 
-        # run with herd
-        error_list = []
-        print('\n herd')
-        for train_size in sizes:
-            print("train size: " + str(train_size))
-            lag = math.ceil(train_size/500)*24
-            print("lag " + str(lag))
-
-            # calculate error for given model
-            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False, True)
-            error_list.append(error)
-
-        error_list.append(np.mean(error_list))
-        all_errors.append(error_list)
-        rows.append(data[-1]+' + herd')
-        print('Mean of mean RMSE: ' + str(np.mean(error_list)))
-
-    # run regression baseline
-    print("\npanting filtered autoregression")
+    # run average
     error_list = []
-
+    print('\n Averaged')
     for train_size in sizes:
         print("train size: " + str(train_size))
-        lag = math.ceil(train_size / 500) * 24
+        lag = math.ceil(train_size/500)*24
         print("lag " + str(lag))
 
         # calculate error for given model
-        error = run_single_cow_AR(cows, df_panting, lag, horizon, train_size+25, False)
+        error = run_VAR_averaged(df_list, header_list, cow_list, train_size, lag, horizon, False, weather_df)
         error_list.append(error)
 
     error_list.append(np.mean(error_list))
     all_errors.append(error_list)
-    rows.append("autoregression")
+    rows.append(data[-1]+' + herd')
     print('Mean of mean RMSE: ' + str(np.mean(error_list)))
 
-    # run regression baseline with her added
-    print("\npanting filtered herd VAR")
-    error_list = []
+    sizes.append("Mean")
+    errors_df = pd.DataFrame(all_errors, columns = sizes, index = rows)
 
+    return errors_df
+
+# for testing multiple models when average data is to be included
+def average_error_compare(horizon, header_list1, header_list2):
+    sizes = []
+    train_size = 246
+    train_size += random.randint(1, 600)
+    while train_size < 1710:
+        sizes.append(train_size)
+        train_size += random.randint(1, 600)
+
+    all_errors = []
+    rows = []
+
+    # run average
+    error_list = []
+    print('\nModel 1')
+    for train_size in sizes:
+        print("train size: " + str(train_size))
+        lag = math.ceil(train_size/500)*24
+        print("lag " + str(lag))
+
+        # calculate error for given model
+        error = run_VAR_averaged(df_list, header_list1, cow_list, train_size, lag, horizon, False, weather_df)
+        error_list.append(error)
+
+    error_list.append(np.mean(error_list))
+    all_errors.append(error_list)
+    rows.append('model 1')
+    print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+    # run average
+    error_list = []
+    print('\nModel 2')
     for train_size in sizes:
         print("train size: " + str(train_size))
         lag = math.ceil(train_size / 500) * 24
         print("lag " + str(lag))
 
         # calculate error for given model
-        error = run_VAR(df_list, ["panting filtered"], cow_list, train_size, lag, horizon, False, True)
+        error = run_VAR_averaged(df_list, header_list2, cow_list, train_size, lag, horizon, False, weather_df)
         error_list.append(error)
 
     error_list.append(np.mean(error_list))
     all_errors.append(error_list)
-    rows.append("autoregression + herd")
+    rows.append('\nModel 2')
     print('Mean of mean RMSE: ' + str(np.mean(error_list)))
 
     sizes.append("Mean")
@@ -391,6 +636,8 @@ resting_df = pd.read_csv("Clean Dataset Output/resting_timeseries.csv")
 eating_df = pd.read_csv("Clean Dataset Output/eating_timeseries.csv")
 rumination_df = pd.read_csv("Clean Dataset Output/rumination_timeseries.csv")
 medium_activity_df = pd.read_csv("Clean Dataset Output/medium activity_timeseries.csv")
+weather_df = pd.read_csv("Weather.csv", encoding='utf-8')
+weather_df = weather_df.iloc[[i for i in range(288,9163,6)]+[j for j in range(9164,10791,6)]]
 
 # extract ordered list of animals and data type
 cow_list = list(set(panting_df["Cow"]))
@@ -400,19 +647,25 @@ data_type_list = sorted(data_type_list)
 
 # declare header and run VAR
 df_list = [panting_df, resting_df, eating_df, rumination_df, medium_activity_df]
-headers = ["panting filtered", "medium activity filtered"]
-# headers = ["panting filtered"]
-# run_VAR(df_list, headers, cow_list, 1710, 96, 12, False, True)
+# headers = ["panting filtered", "medium activity filtered"]
+headers = ["panting filtered", "THI"]
+# run_VAR(df_list, headers, cow_list, 1710, 96, 12, True, weather_df)
 
 # run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
 
+model_list = [["panting filtered", "HLI"], ["panting filtered", "medium activity filtered"]]
+# run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df)
+run_VAR_averaged_frequency(df_list, model_list, cow_list, 1662, 96, 12, False, weather_df)
 
 # tests
-header_list = [["panting filtered", "resting filtered"]]#, ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered", "medium activity filtered"]]
-summary_list = []
-for i in range(4):
-    df_errors = herd_error_random_test(6, header_list, panting_df, cow_list)
-    summary_list.append(df_errors)
-for data in summary_list:
-    print('\n')
-    print(data.to_string())
+# header_list1 = [["panting filtered", "HLI"], ["panting filtered", "THI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"], ["panting filtered", "eating filtered"], ["panting filtered", "prev"]]
+# header_list2 = [["panting filtered", "HLI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"]]
+# summary_list = []
+# for i in range(4):
+#     # df_errors = error_random_test(6, header_list, panting_df, cow_list)
+#     # df_errors = average_error_random_test(12, header_list)
+#     df_errors = average_error_compare(6, header_list1, header_list2)
+#     summary_list.append(df_errors)
+# for data in summary_list:
+#     print('\n')
+#     print(data.to_string())
