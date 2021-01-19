@@ -97,6 +97,9 @@ def run_single_cow_AR(cows, df_panting, lag, horizon, train_size, plot_forecast)
     for cow in cows:
         counter += 1
 
+        if cow == "All":
+            continue
+
         filtered_panting = df_panting[(df_panting["Cow"] == cow) & (df_panting["Data Type"] == "panting filtered")]
         filtered_panting = filtered_panting[[str(j) for j in range(1, train_size)]].values.tolist()[0]
         differenced = diff(filtered_panting, 1)
@@ -119,7 +122,7 @@ def run_single_cow_AR(cows, df_panting, lag, horizon, train_size, plot_forecast)
         if max_val>1:
             original_errors.append(norm_orig_error)
 
-        if plot_forecast:
+        if cow == 'All':
             print(norm_orig_error)
             plt.plot(filtered_panting[-30:-24] + forecast_ii[-24:],label='forecast')
             plt.plot(filtered_panting[-30:], label='actual')
@@ -134,13 +137,23 @@ def run_single_cow_AR(cows, df_panting, lag, horizon, train_size, plot_forecast)
 
     return np.mean(original_errors)
 
-def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot):
+def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, herd=False):
     combined_df = pd.concat([df for df in df_list])
     errors = []
     for cow in cows:
-        # create data df
-        cow_df = combined_df[combined_df["Cow"]==cow]
+        if cow == 'All':
+            continue
+
+        cow_df = combined_df[combined_df["Cow"] == cow]
         VAR_df = cow_df.loc[cow_df['Data Type'].isin(model_data)]
+
+        # include herd data
+        if herd:
+            all_df = combined_df[combined_df["Cow"] == "All"]
+            all_df = all_df.loc[all_df['Data Type']=='panting filtered']
+            all_df["Data Type"] = all_df["Data Type"] + ' herd'
+            VAR_df = pd.concat([VAR_df, all_df])
+
         # diff series
         new_col = VAR_df["Data Type"]
         VAR_df = VAR_df.transpose()
@@ -285,6 +298,93 @@ def error_random_test(horizon, header_list, df_panting, cows):
 
     return errors_df
 
+# for testing multiple lags and horizons
+def herd_error_random_test(horizon, header_list, df_panting, cows):
+    sizes = []
+    train_size = 246
+    train_size += random.randint(1, 800)
+    while train_size < 1710:
+        sizes.append(train_size)
+        train_size += random.randint(1, 800)
+
+    all_errors = []
+    rows = []
+    for data in header_list:
+        print('\n'+data)
+        error_list = []
+
+        for train_size in sizes:
+            print("train size: " + str(train_size))
+            lag = math.ceil(train_size/500)*24
+            print("lag " + str(lag))
+
+            # calculate error for given model
+            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False)
+            error_list.append(error)
+
+        error_list.append(np.mean(error_list))
+        all_errors.append(error_list)
+        rows.append(data[-1])
+        print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+        # run with herd
+        error_list = []
+        print('\n herd')
+        for train_size in sizes:
+            print("train size: " + str(train_size))
+            lag = math.ceil(train_size/500)*24
+            print("lag " + str(lag))
+
+            # calculate error for given model
+            error = run_VAR(df_list, data, cow_list, train_size, lag, horizon, False, True)
+            error_list.append(error)
+
+        error_list.append(np.mean(error_list))
+        all_errors.append(error_list)
+        rows.append(data[-1]+' + herd')
+        print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+    # run regression baseline
+    print("\npanting filtered autoregression")
+    error_list = []
+
+    for train_size in sizes:
+        print("train size: " + str(train_size))
+        lag = math.ceil(train_size / 500) * 24
+        print("lag " + str(lag))
+
+        # calculate error for given model
+        error = run_single_cow_AR(cows, df_panting, lag, horizon, train_size+25, False)
+        error_list.append(error)
+
+    error_list.append(np.mean(error_list))
+    all_errors.append(error_list)
+    rows.append("autoregression")
+    print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+    # run regression baseline with her added
+    print("\npanting filtered herd VAR")
+    error_list = []
+
+    for train_size in sizes:
+        print("train size: " + str(train_size))
+        lag = math.ceil(train_size / 500) * 24
+        print("lag " + str(lag))
+
+        # calculate error for given model
+        error = run_VAR(df_list, ["panting filtered"], cow_list, train_size, lag, horizon, False, True)
+        error_list.append(error)
+
+    error_list.append(np.mean(error_list))
+    all_errors.append(error_list)
+    rows.append("autoregression + herd")
+    print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+    sizes.append("Mean")
+    errors_df = pd.DataFrame(all_errors, columns = sizes, index = rows)
+
+    return errors_df
+
 # import data
 panting_df = pd.read_csv("Clean Dataset Output/panting_timeseries.csv")
 resting_df = pd.read_csv("Clean Dataset Output/resting_timeseries.csv")
@@ -300,18 +400,19 @@ data_type_list = sorted(data_type_list)
 
 # declare header and run VAR
 df_list = [panting_df, resting_df, eating_df, rumination_df, medium_activity_df]
-# headers = ["panting filtered", "medium activity filtered"]
-headers = ["panting filtered", "resting filtered"]
-run_VAR(df_list, headers, cow_list, 1710, 96, 12, True)
+headers = ["panting filtered", "medium activity filtered"]
+# headers = ["panting filtered"]
+# run_VAR(df_list, headers, cow_list, 1710, 96, 12, False, True)
 
-"""
+# run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
+
+
 # tests
-header_list = [["panting filtered", "resting filtered"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered", "medium activity filtered"]]
+header_list = [["panting filtered", "resting filtered"]]#, ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered", "medium activity filtered"]]
 summary_list = []
 for i in range(4):
-    df_errors = error_random_test(6, header_list, panting_df, cow_list)
+    df_errors = herd_error_random_test(6, header_list, panting_df, cow_list)
     summary_list.append(df_errors)
 for data in summary_list:
     print('\n')
     print(data.to_string())
-"""
