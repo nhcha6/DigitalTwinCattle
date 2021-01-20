@@ -5,13 +5,12 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error, r2_score
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tools.eval_measures import rmse, aic
 from filter_data import *
-from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, mean_absolute_error
 
 def diff(series, lag):
     log_series=series
@@ -58,27 +57,32 @@ def stationarity_tests(df_panting):
     adfuller_test(diff_1)
 
 def filtered_data_generation(df_panting):
-    raw_panting = df_panting[(df_panting["Cow"] == '8021870') & (df_panting["Data Type"] == "panting filtered")]
+    raw_panting = df_panting[(df_panting["Cow"] == '8021870') & (df_panting["Data Type"] == "panting raw")]
     raw_panting = raw_panting[[str(j) for j in range(1, 1753)]].values.tolist()[0]
     filtered_panting = df_panting[(df_panting["Cow"] == '8021870') & (df_panting["Data Type"] == "panting filtered")]
     filtered_panting = filtered_panting[[str(j) for j in range(1, 1753)]].values.tolist()[0]
 
     new_filtered = []
-    for i in range(0, len(raw_panting) - 24):
-        seq = raw_panting[i:i + 24]
+    for i in range(0, len(raw_panting) - 78):
+        seq = raw_panting[i:i + 78]
         filt_seq = butter_lp_filter([3], [4], seq, "All", False)
+        #
+        # plt.plot(filt_seq[0:-2])
+        # plt.plot(filtered_panting[i:i+76])
+        # plt.show()
         # print(seq)
         # print(filt_seq)
 
         if i == 0:
-            new_filtered.extend(filt_seq)
+            new_filtered.extend(filt_seq[0:-2])
         else:
-            new_filtered.append(filt_seq[-1])
+            new_filtered.append(filt_seq[-3])
 
         # plt.plot(new_filtered)
         # plt.plot(filtered_panting[0:i + 24])
         # plt.show()
 
+    print(mean_absolute_error(filtered_panting[0:-3], new_filtered))
     plt.plot(new_filtered)
     plt.plot(filtered_panting)
     plt.show()
@@ -306,10 +310,10 @@ data_type_list = sorted(data_type_list)
 # stationarity_tests(df_panting)
 
 # filtering tests
-# filtered_data_generation(df_panting)
+filtered_data_generation(panting_df)
 
 # basic autoregression of filtered data
-run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
+# run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
 
 # concatenate timeseries
 #run_concat_cow_AR(panting_df, cow_list, 60, 23, 1735, True)
