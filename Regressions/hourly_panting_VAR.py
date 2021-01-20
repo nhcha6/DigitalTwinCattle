@@ -334,14 +334,21 @@ def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False
     print("Mean RMSE: " + str(mean_error))
     return mean_error
 
-def run_VAR_averaged_frequency(df_list, models, cows, train_size, lag, horizon, plot=False, df_weather=None):
+def run_VAR_averaged_frequency(df_list, models, cows, train_size, estimate_time, lag, horizon, plot=False, df_weather=None):
     combined_df = pd.concat([df for df in df_list])
     errors = []
     prev_cow = '8048118'
+
+    # error calc
     false_pos = 0
     false_neg = 0
     total_pos = 0
     total_neg = 0
+
+    # frequency rank
+    freq_forecast_dict = {}
+    freq_actual_dict = {}
+
     for cow in cows:
         if cow == 'All':
             continue
@@ -411,18 +418,22 @@ def run_VAR_averaged_frequency(df_list, models, cows, train_size, lag, horizon, 
 
         # average all lists
         average_forecast = [np.mean(x) for x in zip(*forecast_list)]
-        freq_forecast = sum(average_forecast[0:18]) + sum(train_df[plot_var].iloc[-6:])
-        freq_actual = sum(test_df[plot_var].iloc[0:18]) + sum(train_df[plot_var].iloc[-6:])
+        freq_forecast = sum(average_forecast[0:24-estimate_time]) + sum(train_df[plot_var].iloc[-estimate_time:])
+        freq_actual = sum(test_df[plot_var].iloc[0:24-estimate_time]) + sum(train_df[plot_var].iloc[-estimate_time:])
 
-        if freq_actual > 100:
+        freq_forecast_dict[cow] = freq_forecast
+        freq_actual_dict[cow] = freq_actual
+
+        # calculate false positive and false negative above and below threshold
+        if freq_actual > 158:
             total_pos += 1
-            if freq_forecast < 100:
-                plot = True
+            if freq_forecast < 158:
+                # plot = True
                 false_neg +=1
         else:
             total_neg += 1
-            if freq_forecast > 100:
-                plot = True
+            if freq_forecast > 158:
+                # plot = True
                 false_pos += 1
 
         # if True plot
@@ -440,9 +451,20 @@ def run_VAR_averaged_frequency(df_list, models, cows, train_size, lag, horizon, 
             plt.legend()
             plt.show()
             plot = False
+
+    freq_forecast_df = pd.DataFrame.from_dict(freq_forecast_dict, orient='index').sort_values(by=[0], ascending=False)
+    freq_actual_df = pd.DataFrame.from_dict(freq_actual_dict, orient='index').sort_values(by=[0], ascending=False)
+    top_20_forecast = set(freq_forecast_df.iloc[0:20,0].index)
+    top_20_actual = set(freq_actual_df.iloc[0:20,0].index)
+    top_20_predicted = [x for x in top_20_forecast if x in top_20_actual]
+
+    # print(freq_forecast_df.head(20))
+    # print(freq_actual_df.head(20))
+    print("predicted:" + str(len(top_20_predicted)))
+    print("total pos: "+ str(total_pos))
     print("false pos: " + str(false_pos/total_neg))
     print("false neg: " + str(false_neg/total_pos))
-    return 1
+    return len(top_20_predicted), false_pos/total_neg, false_neg/total_pos, total_pos
 
 # for testing multiple lags and horizons
 def error_plot(horizon):
@@ -630,6 +652,47 @@ def average_error_compare(horizon, header_list1, header_list2):
 
     return errors_df
 
+# for predicting the top 20 heat prone animals
+def predict_top_20(start, models, forecast_time):
+    predictions = []
+    fp_list = []
+    fn_list = []
+    pos_list = []
+    # spread over entire series (start=246 is for 6am prediction)
+    iter_list = [i for i in range(start, start+1465, 24)]
+    # iter_list = [i for i in range(start, start+241, 24)]
+
+    for train_size in iter_list:
+        print("train size: " + str(train_size))
+        lag = math.ceil(train_size / 500) * 24
+        print("lag " + str(lag))
+
+        # run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df)
+        predicted, fp, fn, total_pos = run_VAR_averaged_frequency(df_list, models, cow_list, train_size, forecast_time, 96, 12, False, weather_df)
+        predictions.append(predicted)
+        fp_list.append(fp)
+        fn_list.append(fn)
+        pos_list.append(total_pos)
+
+    print('false neg mean: ' + str(np.mean(fn_list)))
+    print('false pos mean: ' + str(np.mean(fp_list)))
+    print('predictions mean: ' + str(np.mean(predictions)))
+
+    plt.figure()
+    plt.title("top 20 predictions")
+    plt.plot(predictions)
+    plt.figure()
+    plt.title("false positives")
+    plt.plot(fp_list)
+    plt.figure()
+    plt.title("false negatives")
+    plt.plot(fn_list)
+    # plt.figure()
+    # plt.title("total above 1 std from mean")
+    # plt.plot(pos_list)
+    plt.show()
+
+
 # import data
 panting_df = pd.read_csv("Clean Dataset Output/panting_timeseries.csv")
 resting_df = pd.read_csv("Clean Dataset Output/resting_timeseries.csv")
@@ -653,9 +716,11 @@ headers = ["panting filtered", "THI"]
 
 # run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
 
-model_list = [["panting filtered", "HLI"], ["panting filtered", "medium activity filtered"]]
+model_list = [["panting filtered", "HLI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"]]
+
 # run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df)
-run_VAR_averaged_frequency(df_list, model_list, cow_list, 1662, 96, 12, False, weather_df)
+# run_VAR_averaged_frequency(df_list, model_list, cow_list, 246, 6, 96, 12, False, weather_df)
+predict_top_20(252, model_list, 12)
 
 # tests
 # header_list1 = [["panting filtered", "HLI"], ["panting filtered", "THI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"], ["panting filtered", "eating filtered"], ["panting filtered", "prev"]]
@@ -664,8 +729,9 @@ run_VAR_averaged_frequency(df_list, model_list, cow_list, 1662, 96, 12, False, w
 # for i in range(4):
 #     # df_errors = error_random_test(6, header_list, panting_df, cow_list)
 #     # df_errors = average_error_random_test(12, header_list)
-#     df_errors = average_error_compare(6, header_list1, header_list2)
+#     df_errors = average_error_compare(12, header_list1, header_list2)
 #     summary_list.append(df_errors)
 # for data in summary_list:
 #     print('\n')
 #     print(data.to_string())
+
