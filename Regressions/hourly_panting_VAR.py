@@ -12,7 +12,6 @@ from statsmodels.tsa.stattools import grangercausalitytests
 import warnings
 import math
 import random
-import csv
 
 warnings.filterwarnings("ignore")
 
