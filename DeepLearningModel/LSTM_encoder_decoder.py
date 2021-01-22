@@ -1,67 +1,6 @@
 import pandas as pd
 import numpy as np
 
-def create_test_train_data_o(input_data, cows, all_data, lags, horizon, test_train):
-    # define test or train
-    if test_train == 'train':
-        iter = range(201,1100)
-    else:
-        iter = range(1100,1704)
-
-    # build test/train data
-    X = []
-    Y = []
-    # iterate through each cow
-    for cow in cows:
-        # skip herd data
-        if cow == 'All':
-            continue
-        # iterate through each sample
-        for sample in iter:
-            print(sample)
-            # extract panting data
-            panting_df = all_data["panting"]
-            panting_df = panting_df[panting_df["Cow"] == cow]
-            # add panting to x and y sample
-            panting_df = panting_df[panting_df["next_ts"]==sample]
-            x_sample = [[x] for x in panting_df[[i for i in range(-lags,0)]].values[0]]
-            y_sample = [[y] for y in panting_df[[i for i in range(0,horizon)]].values[0]]
-            # loop through other input data
-            for input in input_data:
-                # update for herd if input selected
-                if input == 'herd':
-                    herd_df = all_data["panting"]
-                    herd_df = herd_df[herd_df["Cow"] == "All"]
-                    herd_df = herd_df[herd_df["next_ts"] == sample]
-                    x_new_feature = [x for x in herd_df[[i for i in range(-lags,0)]].values[0]]
-                    for i in range(0,lags):
-                        x_sample[i].append(x_new_feature[i])
-                # update for weather
-                elif input == 'HLI' or input == 'THI':
-                    weather_df = all_data['weather']
-                    weather_df = weather_df[input]
-                    x_new_feature = weather_df.iloc[sample-lags-1:sample-1].values
-                    for i in range(0,lags):
-                        x_sample[i].append(x_new_feature[i])
-                # update for other activity states
-                else:
-                    state_df = all_data[input]
-                    state_df = state_df[state_df["Cow"] == cow]
-                    state_df = state_df[state_df["next_ts"] == sample]
-                    x_new_feature = [x for x in state_df[[i for i in range(-lags, 0)]].values[0]]
-                    for i in range(0,lags):
-                        x_sample[i].append(x_new_feature[i])
-
-            X.append(x_sample)
-            Y.append(y_sample)
-            break
-        X = np.array(X)
-        Y = np.array(Y)
-        break
-    print(X)
-    print(Y)
-
-
 def create_test_train_data(input_data, cows, all_data, lags, horizon, test_train):
     # define test or train
     if test_train == 'train':
@@ -83,10 +22,10 @@ def create_test_train_data(input_data, cows, all_data, lags, horizon, test_train
         panting_df = panting_df[panting_df["Cow"] == cow]
 
         resting_df = all_data["resting"]
-        resting_df = panting_df[resting_df["Cow"] == cow]
+        resting_df = resting_df[resting_df["Cow"] == cow]
 
         medium_activity_df = all_data["medium activity"]
-        medium_activity_df = panting_df[medium_activity_df["Cow"] == cow]
+        medium_activity_df = medium_activity_df[medium_activity_df["Cow"] == cow]
 
         herd_df = all_data["panting"]
         herd_df = herd_df[herd_df["Cow"] == "All"]
@@ -115,7 +54,6 @@ def create_test_train_data(input_data, cows, all_data, lags, horizon, test_train
 
             # reshape in two stages to get desired behaviour
             x_sample = np.array(x_sample)
-            print(x_sample)
             a = x_sample.shape[1]
             b = x_sample.shape[0]
             x_sample = x_sample.reshape(a*b)
@@ -124,13 +62,11 @@ def create_test_train_data(input_data, cows, all_data, lags, horizon, test_train
             # append
             X.append(x_sample)
             Y.append(y_sample)
-            break
-        X = np.array(X)
-        Y = np.array(Y)
-        # X = X.reshape(X.shape[0], X.shape[2], X.shape[1], order='F')
         break
-    print(X)
-    print(Y)
+    X = np.array(X)
+    Y = np.array(Y)
+    print(X.shape)
+    print(Y.shape)
 
 # import state behaviour data
 panting_model_df = pd.read_pickle("Model Data/panting model data.pkl")
@@ -151,5 +87,4 @@ model = ["resting", "medium activity", "HLI", "herd"]
 cow_list = list(set(panting_model_df["Cow"]))
 cow_list = sorted(cow_list)
 
-create_test_train_data(model, cow_list, all_data_dict, 6, 24, 'train')
-create_test_train_data_o(model, cow_list, all_data_dict, 6, 24, 'train')
+create_test_train_data(model, cow_list, all_data_dict, 120, 24, 'train')
