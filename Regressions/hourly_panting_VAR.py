@@ -16,6 +16,9 @@ import csv
 
 warnings.filterwarnings("ignore")
 
+cutoff_dict = {'panting raw': 3, 'resting raw': 4.5, 'medium activity raw': 4}
+
+
 def invert_transformation(df_train, df_forecast, second_diff=False):
     """Revert back the differencing to get the forecast to original scale."""
     df_fc = df_forecast.copy()
@@ -232,8 +235,25 @@ def run_VAR(df_list, model_data, cows, train_size, lag, horizon, plot=False, df_
     print("Mean RMSE: " + str(mean_error))
     return mean_error
 
-def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False, df_weather=None):
+def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False, df_weather=None, filter_lag=None):
     combined_df = pd.concat([df for df in df_list])
+    # print(combined_df[combined_df['Cow']=='8048118'].iloc[:,train_size-10:train_size + 2])
+    # if filter lag input, we need to adjust the panting data
+    if filter_lag is not None:
+        for data_type in set([item for sublist in models for item in sublist]):
+            for cow in cows:
+                if 'filtered' in data_type:
+                    raw_data_type = data_type.replace("filtered", "raw")
+                    # print(combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type)].iloc[:,train_size + 2 - 10:train_size + 2])
+                    raw_data = combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == raw_data_type)].iloc[:,2:train_size + 2 + filter_lag].values[0]
+                    # print(raw_data)
+                    filt_seq = butter_lp_filter([cutoff_dict[raw_data_type]], [4], raw_data, "All", False)
+                    # print(filt_seq[-10:-filter_lag])
+                    combined_df.loc[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type),2:train_size + 2] = filt_seq[0:-filter_lag]
+                    # print(combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type)].iloc[:,train_size + 2 - 10:train_size + 2])
+
+    # print(combined_df[combined_df['Cow'] == '8048118'].iloc[:, train_size-10:train_size + 2])
+
     errors = []
     prev_cow = '8048118'
     for cow in cows:
@@ -307,7 +327,7 @@ def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False
         average_forecast = [np.mean(x) for x in zip(*forecast_list)]
 
         # calculate RMSE
-        error = mean_squared_error(test_df[plot_var].iloc[0:horizon], average_forecast[0:horizon], squared=False)
+        error = mean_squared_error(test_df[plot_var].iloc[filter_lag:horizon+filter_lag], average_forecast[filter_lag:horizon+filter_lag], squared=False)
         max_val = max(test_df[plot_var])
         # norm_orig_error = mean_absolute_percentage_error(filtered_panting[-24:-24+horizon], forecast_ii[-24:-24+horizon])
         norm_error = error / max_val
@@ -334,10 +354,27 @@ def run_VAR_averaged(df_list, models, cows, train_size, lag, horizon, plot=False
     print("Mean RMSE: " + str(mean_error))
     return mean_error
 
-def run_VAR_averaged_frequency(df_list, models, cows, train_size, estimate_time, lag, horizon, plot=False, df_weather=None):
+def run_VAR_averaged_frequency(df_list, models, cows, train_size, estimate_time, lag, horizon, plot=False, df_weather=None, filter_lag = None):
     combined_df = pd.concat([df for df in df_list])
     errors = []
     prev_cow = '8048118'
+
+    # if filter lag input, we need to adjust the panting data
+    if filter_lag is not None:
+        for data_type in set([item for sublist in models for item in sublist]):
+            for cow in cows:
+                if 'filtered' in data_type:
+                    raw_data_type = data_type.replace("filtered", "raw")
+                    # print(combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type)].iloc[:,train_size + 2 - 10:train_size + 2])
+                    raw_data = \
+                    combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == raw_data_type)].iloc[:,
+                    2:train_size + 2 + filter_lag].values[0]
+                    # print(raw_data)
+                    filt_seq = butter_lp_filter([cutoff_dict[raw_data_type]], [4], raw_data, "All", False)
+                    # print(filt_seq[-10:-filter_lag])
+                    combined_df.loc[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type),
+                    2:train_size + 2] = filt_seq[0:-filter_lag]
+                    # print(combined_df[(combined_df["Cow"] == cow) & (combined_df["Data Type"] == data_type)].iloc[:,train_size + 2 - 10:train_size + 2])
 
     # error calc
     false_pos = 0
@@ -652,8 +689,49 @@ def average_error_compare(horizon, header_list1, header_list2):
 
     return errors_df
 
+def lag_error_compare(horizon, header_list):
+    sizes = []
+    train_size = 246
+    train_size += random.randint(1, 700)
+    while train_size < 1710:
+        sizes.append(train_size)
+        train_size += random.randint(1, 700)
+
+    all_errors = []
+    rows = []
+
+    for i in range(4,10,1):
+        # run average
+        error_list = []
+        model_name = 'filter lag = ' + str(i)
+        print('\n' + str(model_name))
+        for train_size in sizes:
+            print("train size: " + str(train_size))
+            lag = math.ceil(train_size / 500) * 24
+            print("lag " + str(lag))
+
+            # calculate error for given model
+            if i == 0:
+                filt_lag = None
+            else:
+                filt_lag = i
+
+            error = run_VAR_averaged(df_list, header_list, cow_list, train_size-filt_lag, lag, horizon, False, weather_df, filt_lag)
+            error_list.append(error)
+
+        error_list.append(np.mean(error_list))
+        all_errors.append(error_list)
+        rows.append(model_name)
+        print('Mean of mean RMSE: ' + str(np.mean(error_list)))
+
+    sizes.append("Mean")
+    errors_df = pd.DataFrame(all_errors, columns=sizes, index=rows)
+
+    return errors_df
+
+
 # for predicting the top 20 heat prone animals
-def predict_top_20(start, models, forecast_time):
+def predict_top_20(start, models, forecast_time, filt_lag):
     predictions = []
     fp_list = []
     fn_list = []
@@ -668,7 +746,7 @@ def predict_top_20(start, models, forecast_time):
         print("lag " + str(lag))
 
         # run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df)
-        predicted, fp, fn, total_pos = run_VAR_averaged_frequency(df_list, models, cow_list, train_size, forecast_time, 96, 12, False, weather_df)
+        predicted, fp, fn, total_pos = run_VAR_averaged_frequency(df_list, models, cow_list, train_size-filt_lag, forecast_time-filt_lag, 96, 12, False, weather_df, filt_lag)
         predictions.append(predicted)
         fp_list.append(fp)
         fn_list.append(fn)
@@ -717,10 +795,12 @@ headers = ["panting filtered", "THI"]
 # run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
 
 model_list = [["panting filtered", "HLI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"]]
-
-# run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df)
-# run_VAR_averaged_frequency(df_list, model_list, cow_list, 246, 6, 96, 12, False, weather_df)
-predict_top_20(252, model_list, 12)
+# model_list = [["panting filtered", "medium activity filtered"],["panting filtered", "THI"]]
+# run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 6, False, weather_df, 2)
+# run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 10, False, weather_df, 6)
+# run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df, 8)
+# run_VAR_averaged_frequency(df_list, model_list, cow_list, 248, 8, 96, 12, False, weather_df, 2)
+# predict_top_20(250, model_list, 10, 4)
 
 # tests
 # header_list1 = [["panting filtered", "HLI"], ["panting filtered", "THI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"], ["panting filtered", "eating filtered"], ["panting filtered", "prev"]]
@@ -729,9 +809,9 @@ predict_top_20(252, model_list, 12)
 # for i in range(4):
 #     # df_errors = error_random_test(6, header_list, panting_df, cow_list)
 #     # df_errors = average_error_random_test(12, header_list)
-#     df_errors = average_error_compare(12, header_list1, header_list2)
+#     # df_errors = average_error_compare(12, header_list1, header_list2)
+#     df_errors = lag_error_compare(12, model_list)
 #     summary_list.append(df_errors)
 # for data in summary_list:
 #     print('\n')
 #     print(data.to_string())
-

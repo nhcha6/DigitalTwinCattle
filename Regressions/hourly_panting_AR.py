@@ -67,22 +67,22 @@ def filtered_data_generation(df_panting):
         seq = raw_panting[i:i + 78]
         filt_seq = butter_lp_filter([3], [4], seq, "All", False)
         #
-        # plt.plot(filt_seq[0:-2])
-        # plt.plot(filtered_panting[i:i+76])
+        # plt.plot(filt_seq)
+        # plt.plot(filtered_panting[i:i+78])
         # plt.show()
         # print(seq)
         # print(filt_seq)
 
         if i == 0:
-            new_filtered.extend(filt_seq[0:-2])
+            new_filtered.extend(filt_seq[0:-6])
         else:
-            new_filtered.append(filt_seq[-3])
+            new_filtered.append(filt_seq[-7])
 
         # plt.plot(new_filtered)
         # plt.plot(filtered_panting[0:i + 24])
         # plt.show()
 
-    print(mean_absolute_error(filtered_panting[0:-3], new_filtered))
+    print(mean_absolute_error(filtered_panting[0:-7], new_filtered))
     plt.plot(new_filtered)
     plt.plot(filtered_panting)
     plt.show()
@@ -310,7 +310,7 @@ data_type_list = sorted(data_type_list)
 # stationarity_tests(df_panting)
 
 # filtering tests
-filtered_data_generation(panting_df)
+# filtered_data_generation(panting_df)
 
 # basic autoregression of filtered data
 # run_single_cow_AR(cow_list, panting_df, 96, 12, 1735, False)
@@ -322,3 +322,27 @@ filtered_data_generation(panting_df)
 # indivual_AR_original_signal(panting_df, cow_list, 36, 12)
 
 # error_plot(12, True)
+
+# iter_list = [i for i in range(240, 1705, 24)]
+# predicted = []
+# for train_size in iter_list:
+#     early_dict = {}
+#     final_dict = {}
+#     for cow in cow_list:
+#         raw_panting = panting_df[(panting_df["Cow"] == cow) & (panting_df["Data Type"] == "panting raw")]
+#         raw_panting = raw_panting[[str(j) for j in range(train_size, train_size+12)]].values.tolist()[0]
+#         filtered_panting = panting_df[(panting_df["Cow"] == cow) & (panting_df["Data Type"] == "panting filtered")]
+#         filtered_panting = filtered_panting[[str(j) for j in range(train_size, train_size + 24)]].values.tolist()[0]
+#         early_dict[cow] = sum(raw_panting)
+#         final_dict[cow] = sum(filtered_panting)
+#
+#     freq_forecast_df = pd.DataFrame.from_dict(early_dict, orient='index').sort_values(by=[0], ascending=False)
+#     freq_actual_df = pd.DataFrame.from_dict(final_dict, orient='index').sort_values(by=[0], ascending=False)
+#     # print(freq_forecast_df)
+#     # print(freq_actual_df)
+#     top_20_forecast = set(freq_forecast_df.iloc[0:20].index)
+#     top_20_actual = set(freq_actual_df.iloc[0:20].index)
+#     top_20_predicted = [x for x in top_20_forecast if x in top_20_actual]
+#     print(len(top_20_predicted))
+#     predicted.append(len(top_20_predicted))
+# print(np.mean(predicted))
