@@ -59,4 +59,5 @@ cutoff_dict = {'panting raw': 3, 'resting raw': 4.5, 'rumination raw': 4.5, 'med
 # print(panting_model_data.head(20))
 
 generate_model_data(resting_df, "resting raw", cow_list)
+generate_model_data(resting_df, "resting raw", cow_list)
 generate_model_data(medium_activity_df, "medium activity raw", cow_list)

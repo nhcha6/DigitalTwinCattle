@@ -787,6 +787,7 @@ data_type_list = sorted(data_type_list)
 
 # declare header and run VAR
 df_list = [panting_df, resting_df, eating_df, rumination_df, medium_activity_df]
+
 # headers = ["panting filtered", "medium activity filtered"]
 headers = ["panting filtered", "THI"]
 # run_VAR(df_list, headers, cow_list, 1710, 96, 12, True, weather_df)
@@ -799,7 +800,7 @@ model_list = [["panting filtered", "HLI"], ["panting filtered", "herd"], ["panti
 # run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 10, False, weather_df, 6)
 # run_VAR_averaged(df_list, model_list, cow_list, 1710, 96, 12, False, weather_df, 8)
 # run_VAR_averaged_frequency(df_list, model_list, cow_list, 248, 8, 96, 12, False, weather_df, 2)
-# predict_top_20(250, model_list, 10, 4)
+predict_top_20(248, model_list, 8, 6)
 
 # tests
 # header_list1 = [["panting filtered", "HLI"], ["panting filtered", "THI"], ["panting filtered", "herd"], ["panting filtered", "medium activity filtered"], ["panting filtered", "resting filtered"], ["panting filtered", "eating filtered"], ["panting filtered", "prev"]]
