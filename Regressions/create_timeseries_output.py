@@ -58,15 +58,29 @@ date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[1:-1]]
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [2]
-cutoff = 4
+state_indeces_list = [[2], [8]]
+cutoffs = [4, 3]
+
+state_data = {0: "side lying",
+              1: "resting",
+              2: "medium activity",
+              3: "high activity",
+              4: "rumination",
+              5: "eating",
+              6: "walking",
+              7: "grazing",
+              8: "panting",
+              9: "unsure",
+              15: "unclassified"}
 
 ##################################################################
 
 ############## GENERATE ALL DATA FOR REGRESSION ANALYSIS #################
 
-excel_data = []
-for index in state_indeces:
+for i in range(5):
+    excel_data = []
+    state_indeces = state_indeces_list[i]
+    cutoff = cutoffs[i]
     i = 0
     for plot_cow in cows:
         i+=1
@@ -82,7 +96,8 @@ for index in state_indeces:
         # IIR LP filter
         cow_data = [state_data[state_indeces[0]] + " filtered"]
         cow_data.append(plot_cow)
-        filtered_signal = butter_lp_filter([cutoff], [4], signal, plot_cow)
+        # filtered_signal = butter_lp_filter([cutoff], [4], signal, plot_cow)
+        filtered_signal = fil_lp_filter([cutoff], [7], signal, plot_cow)
         cow_data += list(filtered_signal)
         excel_data.append(cow_data)
 
@@ -95,14 +110,15 @@ for index in state_indeces:
     # filtered herd behaviour
     cow_data = [state_data[state_indeces[0]] + " filtered"]
     cow_data.append("All")
-    filtered_herd = butter_lp_filter([cutoff], [4], all_cows, 'All')
+    # filtered_herd = butter_lp_filter([cutoff], [4], all_cows, 'All')
+    filtered_herd = fil_lp_filter([cutoff], [7], all_cows, 'All')
     cow_data += list(filtered_herd)
     excel_data.append(cow_data)
 
-column_headers = ['Data Type', 'Cow']
-column_headers += [x for x in range(1,1753)]
-regression_df = pd.DataFrame(excel_data, columns=column_headers)
-regression_df.to_csv("Clean Dataset Output/" + state_data[state_indeces[0]] + "_timeseries.csv", index = False)
+    column_headers = ['Data Type', 'Cow']
+    column_headers += [x for x in range(1,1753)]
+    regression_df = pd.DataFrame(excel_data, columns=column_headers)
+    regression_df.to_csv("Clean Dataset Output/" + state_data[state_indeces[0]] + "_timeseries.csv", index = False)
 
 ####################################################
 

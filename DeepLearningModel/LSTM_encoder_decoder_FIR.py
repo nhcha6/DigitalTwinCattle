@@ -151,7 +151,7 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     loss = 'mse'
     optimiser = adam(clipvalue=1)
     activation = 'relu'
-    callback = EarlyStopping(monitor='val_loss', patience=2)
+    callback = EarlyStopping(monitor='val_loss', patience=5)
 
     n_timesteps, n_features, n_outputs = train_x.shape[1], train_x.shape[2], train_y.shape[1]
     # reshape output into [samples, timesteps, features]
@@ -438,24 +438,22 @@ data_type_list = list(set(panting_df["Data Type"]))
 data_type_list = sorted(data_type_list)
 
 # create diff data
-# panting_df.iloc[:,2:] = panting_df.iloc[:,2:].diff(axis=1)
-# panting_df.iloc[:,2:] = panting_df.iloc[:,2:].diff(axis=1)
-#
-# resting_df.iloc[:,2:] = resting_df.iloc[:,2:].diff(axis=1)
-# resting_df.iloc[:,2:] = resting_df.iloc[:,2:].diff(axis=1)
-#
-# medium_activity_df.iloc[:,2:] = medium_activity_df.iloc[:,2:].diff(axis=1)
-# medium_activity_df.iloc[:,2:] = medium_activity_df.iloc[:,2:].diff(axis=1)
-#
-# weather_df.iloc[:,2:] = weather_df.iloc[:,2:].diff(axis=0)
-# weather_df.iloc[:,2:] = weather_df.iloc[:,2:].diff(axis=0)
+panting_df.iloc[:,2:] = panting_df.iloc[:,2:].diff(axis=1)
+panting_df.iloc[:,2:] = panting_df.iloc[:,2:].diff(axis=1)
 
+resting_df.iloc[:,2:] = resting_df.iloc[:,2:].diff(axis=1)
+resting_df.iloc[:,2:] = resting_df.iloc[:,2:].diff(axis=1)
 
+medium_activity_df.iloc[:,2:] = medium_activity_df.iloc[:,2:].diff(axis=1)
+medium_activity_df.iloc[:,2:] = medium_activity_df.iloc[:,2:].diff(axis=1)
+
+weather_df.iloc[:,2:] = weather_df.iloc[:,2:].diff(axis=0)
+weather_df.iloc[:,2:] = weather_df.iloc[:,2:].diff(axis=0)
 
 
 ################### TRAIN FROM ORIGINAL PICKLE #########################
 
-train_from_original_data(lag=120, batch_size=4096, epochs=1000, encoder_units=64, decoder_units=64, dense_neurons=128, diff=False)
+train_from_original_data(lag=120, batch_size=4096, epochs=1000, encoder_units=64, decoder_units=64, dense_neurons=128, diff=True)
 
 ################################################################################
 

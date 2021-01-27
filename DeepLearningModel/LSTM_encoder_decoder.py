@@ -16,6 +16,7 @@ from keras.callbacks import EarlyStopping
 from keras import models
 import pickle
 import random
+from math import ceil
 
 def create_test_train_data(cows, all_data, lags, horizon, test_train, run_time = False, num_cows = 198, invert_diff = False):
     # define test or train
@@ -210,10 +211,10 @@ def read_pickle(folder):
         y_train = pickle.load(f)
     with open(folder + '/y_test.pkl', 'rb') as f:
         y_test = pickle.load(f)
-    with open(folder + '/invert_test.pkl', 'rb') as f:
-        invert_test = pickle.load(f)
+    # with open(folder + '/invert_test.pkl', 'rb') as f:
+    #     invert_test = pickle.load(f)
 
-    return x_train, y_train, x_test, y_test, invert_test
+    return x_train, y_train, x_test, y_test
 
 def edit_num_lags(train_x, test_x, new_lag):
     train_x = reduce_lags(new_lag, train_x)
@@ -237,13 +238,13 @@ def ignore(ignore_lag, l):
         l[i] = l[i][0:-ignore_lag]
     return np.array(l)
 
-def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons):
+def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, sample_weights=[]):
     # define hyper-parameters to be optimised
     verbose = 1
     loss = 'mse'
     optimiser = adam(clipvalue=1)
     activation = 'relu'
-    callback = EarlyStopping(monitor='val_loss', patience=2)
+    callback = EarlyStopping(monitor='val_loss', patience=5)
 
     n_timesteps, n_features, n_outputs = train_x.shape[1], train_x.shape[2], train_y.shape[1]
     # reshape output into [samples, timesteps, features]
@@ -259,15 +260,34 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     model.add(TimeDistributed(Dense(1)))
     model.compile(loss=loss, optimizer=optimiser)
     # fit network
-    history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback])
+    if sample_weights:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback], sample_weight=np.array(sample_weights))
+    else:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback])
     return model, history
 
+def calculate_sample_weights(y_test, constant, scalar_y):
+    sample_weights = []
+    y_test = scalar_y.inverse_transform(y_test)
+    for y_sample in y_test:
+        # y_sample = scalar_y.inverse_transform(y_sample)
+        y_sample = y_sample.flatten()
+        daily_freq = sum(y_sample)
+        if daily_freq<100:
+            weight = 1
+        elif daily_freq<160:
+            weight = 2*constant
+        elif daily_freq<240:
+            weight = 4*constant
+        else:
+            weight = 8*constant
+        sample_weights.append(weight)
+    return sample_weights
 
-def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198):
+def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0):
     # read in data
-    x_train, y_train, x_test, y_test, invert_test = read_pickle(file_name)
-
-    print(x_train.shape)
+    x_train, y_train, x_test, y_test = read_pickle(file_name)
+    invert_test = []
 
     # reduce size for tests
     if num_cows != 198:
@@ -276,6 +296,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         x_test = x_test[0:num_cows*899]
         y_test = y_test[0:num_cows*899]
 
+
     print("\n")
     print("\n")
     print("lag: " + str(lag))
@@ -283,7 +304,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     print("encoder_units: " + str(encoder_units))
     print("decoder_units: " + str(decoder_units))
     print("dense_neurons: " + str(dense_neurons))
-    print("ignore_size: " + str(ignore_lags))
+    print("epochs: " + str(epochs))
     print("\n")
     print("\n")
 
@@ -300,19 +321,25 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     scalar_y.scale_ = 0.01455627
     scalar_y.data_range_ = 68.69892261
 
+    sample_weights = []
+    if weights_flag:
+        sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
+
+    # print(sample_weights)
+
     # scalar_y = StandardScaler()
     # scalar_y.mean_ = 3.36851171
     # scalar_y.var_ = 29.70008041
     # scalar_y.scale_ = 5.44977802
 
-    model, history = build_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons)
+    model, history = build_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, sample_weights)
     epochs = len(history.history['loss'])
 
     # model.save('models/' + file_name)
 
-    mean_RMSE, false_pos, false_neg = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test)
+    mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test)
 
-    return mean_RMSE, false_pos, false_neg, epochs
+    return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred
 
 def train_from_original_data(lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, run_time=False, num_cows=198):
     x_train, y_train, invert_train = create_test_train_data(cow_list, all_data_dict, lag, 24, 'train', run_time, num_cows, invert_diff)
@@ -473,7 +500,7 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = []):
     print("\n")
     print("\n")
 
-    return np.mean(hourly_errors), false_pos/total_neg, false_neg/total_pos
+    return np.mean(hourly_errors), false_pos/total_neg, false_neg/total_pos, np.mean(daily_errors), np.mean(predictions)
 
 def random_hyper_search():
     lag_options = [48, 84, 120, 156, 192]
@@ -534,6 +561,35 @@ def random_hyper_search():
 
     plt.show()
 
+def random_hyper_optimisation():
+    params = [120, 4096, 15, 64, 64, 128]
+    error_metric = 0.45
+
+    while(True):
+        random.seed()
+        new_params = params.copy()
+        for i in range(3):
+            rand_index = random.randint(0,5)
+            current = params[rand_index]
+            rand_change = random.randint(ceil(-current/2), ceil(current/2))
+            new_params[rand_index] = current + rand_change
+
+        try:
+            mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred = train_from_saved_data('normalised complete', lag=new_params[0],
+                                                                                batch_size=new_params[1], epochs=new_params[2],
+                                                                                encoder_units=new_params[3],
+                                                                                decoder_units=new_params[4],
+                                                                                dense_neurons=new_params[5],
+                                                                                weights_flag=1)
+            if false_neg < error_metric:
+                    error_metric = false_neg
+                    params = new_params
+
+        except:
+            print('error')
+            continue
+
+
 
 # import state behaviour data
 panting_model_df = pd.read_pickle("Model Data/panting model data.pkl")
@@ -548,7 +604,7 @@ weather_df = weather_df.iloc[[i for i in range(288,9163,6)]+[j for j in range(91
 all_data_dict = {"panting": panting_model_df, "resting": resting_model_df, "medium activity": medium_activity_model_df, "weather": weather_df}
 invert_diff = []
 
-# # create diff data
+# create diff data
 # for name, df in all_data_dict.items():
 #     # extract final two test steps to convert back
 #     if name == 'panting':
@@ -566,22 +622,24 @@ cow_list = sorted(cow_list)
 
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 
-# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=100, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3)
+# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=2)
 
 #################################################################################
 
 ################### TRAIN FROM ORIGINAL PICKLE #########################
 
-train_from_original_data(lag=120, batch_size=250, epochs=12, encoder_units=100, decoder_units=100, dense_neurons=100, run_time=False, num_cows=3)
+# train_from_original_data(lag=120, batch_size=250, epochs=12, encoder_units=100, decoder_units=100, dense_neurons=100, run_time=False, num_cows=3)
 
 ################################################################################
 
 ########################## IMPORT OLD MODEL ############################
 
-import_model('small diff datatset', 'models/smallDiff')
+# import_model('small diff datatset', 'models/smallDiff')
 
 ###########################################################################
 
 #################### OPTIMISATION TESTS #########################
 
 # random_hyper_search()
+
+# random_hyper_optimisation()
