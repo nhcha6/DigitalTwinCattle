@@ -21,7 +21,7 @@ from math import ceil
 def create_test_train_data(cows, all_data, lags, horizon, test_train, run_time = False, num_cows = 198, invert_diff = False):
     # define test or train
     if test_train == 'train':
-        iter = range(201,1100)
+        iter = range(213,1100)
     else:
         iter = range(1100,1704)
 
@@ -37,6 +37,7 @@ def create_test_train_data(cows, all_data, lags, horizon, test_train, run_time =
     X = []
     Y = []
     invert_diff_new = []
+
 
     # iterate through each cow
     cow_count = 0
@@ -190,7 +191,7 @@ def normalise_x(x_data, scalar=False):
 
     return x_new, scalar
 
-def write_pickle(x_train, y_train, x_test, y_test, invert_test):
+def write_pickle(x_train, y_train, x_test, y_test, scalar_y):
     with open('x_train.pkl', 'wb') as f:
         pickle.dump(x_train, f)
     with open('x_test.pkl', 'wb') as f:
@@ -199,8 +200,8 @@ def write_pickle(x_train, y_train, x_test, y_test, invert_test):
         pickle.dump(y_train, f)
     with open('y_test.pkl', 'wb') as f:
         pickle.dump(y_test, f)
-    with open('invert_test.pkl', 'wb') as f:
-        pickle.dump(invert_test, f)
+    with open('scalar_y.pkl', 'wb') as f:
+        pickle.dump(scalar_y, f)
 
 def read_pickle(folder):
     with open(folder + '/x_train.pkl', 'rb') as f:
@@ -211,7 +212,7 @@ def read_pickle(folder):
         y_train = pickle.load(f)
     with open(folder + '/y_test.pkl', 'rb') as f:
         y_test = pickle.load(f)
-    # with open(folder + '/invert_test.pkl', 'rb') as f:
+    # with open(folder + '/scalar_y.pkl', 'rb') as f:
     #     invert_test = pickle.load(f)
 
     return x_train, y_train, x_test, y_test
@@ -284,10 +285,11 @@ def calculate_sample_weights(y_test, constant, scalar_y):
         sample_weights.append(weight)
     return sample_weights
 
-def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0):
+def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 6):
     # read in data
     x_train, y_train, x_test, y_test = read_pickle(file_name)
     invert_test = []
+    y_lag = []
 
     # reduce size for tests
     if num_cows != 198:
@@ -314,6 +316,13 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     if ignore_lags:
         x_train, x_test = edit_ignore_lags(x_train, x_test, ignore_lags)
 
+    if predict_lag:
+        y_lag = y_test[0:-6,0:6]
+        x_train = x_train[6:]
+        y_train = y_train[6:]
+        x_test = x_test[6:]
+        y_test = y_test[6:]
+
     scalar_y = MinMaxScaler()
     scalar_y.max_ = 61.24368378
     scalar_y.max_ = -7.45523883
@@ -336,8 +345,10 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     epochs = len(history.history['loss'])
 
     # model.save('models/' + file_name)
-
     mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test)
+
+    if predict_lag:
+        test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, y_lag)
 
     return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred
 
@@ -396,7 +407,7 @@ def invert_differening(diff_seq, init):
 
     return second_inv[2:]
 
-def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = []):
+def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_prev=[]):
     y_pred = model.predict(test_x)
 
     # error calc
@@ -419,7 +430,6 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = []):
             # iter.append(i + 1 + j)
             # iter.append(i + 2 + j)
 
-
     # for i in iter:
     for sample_n in range(0, 604):
         freq_actual_dict = {}
@@ -440,6 +450,24 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = []):
             if invert_test:
                 y_actual_orig = invert_differening(y_actual_orig, invert_test[i])
                 y_pred_orig = invert_differening(y_pred_orig, invert_test[i])
+
+            # adjust prediction so that it only uses the first 18 samples, and uses the actually recorder previous 6
+            # to make 24 hours.
+            if list(y_prev):
+                # extract actual previous x values
+                y_prev_i = y_prev[i].reshape(-1,1)
+                no_prev = len(y_prev_i)
+                y_prev_orig = norm_y.inverse_transform(y_prev_i)
+
+                # extract available previous x values
+                x_test_i = test_x[i]
+                x_prev = []
+                for i in range(-no_prev, 0):
+                    x_prev.append([x_test_i[i][0]])
+                x_prev_orig = norm_y.inverse_transform(x_prev)
+
+                y_actual_orig = np.concatenate((y_prev_orig, y_actual_orig[0:-no_prev]))
+                y_pred_orig = np.concatenate((x_prev_orig, y_pred_orig[0:-no_prev]))
 
             error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
             norm_error = error/max(y_actual_orig)
@@ -563,7 +591,16 @@ def random_hyper_search():
 
 def random_hyper_optimisation():
     params = [120, 4096, 15, 64, 64, 128]
-    error_metric = 0.45
+
+    mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred = train_from_saved_data('normalised complete',
+                                                                                           lag=params[0],
+                                                                                           batch_size=params[1],
+                                                                                           epochs=params[2],
+                                                                                           encoder_units=params[3],
+                                                                                           decoder_units=params[4],
+                                                                                           dense_neurons=params[5],
+                                                                                           weights_flag=1)
+    error_metric = mean_RMSE
 
     while(True):
         random.seed()
@@ -581,8 +618,8 @@ def random_hyper_optimisation():
                                                                                 decoder_units=new_params[4],
                                                                                 dense_neurons=new_params[5],
                                                                                 weights_flag=1)
-            if false_neg < error_metric:
-                    error_metric = false_neg
+            if mean_RMSE < error_metric:
+                    error_metric = mean_RMSE
                     params = new_params
 
         except:
@@ -622,6 +659,8 @@ cow_list = sorted(cow_list)
 
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 
+# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=0)
+train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=1, predict_lag = 6)
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=2)
 
 #################################################################################
