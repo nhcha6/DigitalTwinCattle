@@ -285,7 +285,7 @@ def calculate_sample_weights(y_test, constant, scalar_y):
         sample_weights.append(weight)
     return sample_weights
 
-def calculate_sample_weights_new(y_test, bins, scalar_y):
+def calculate_sample_weights_new(y_test, bins, scalar_y, combine_flag):
     daily_frequency = []
     y_test = scalar_y.inverse_transform(y_test)
     for y_sample in y_test:
@@ -295,13 +295,14 @@ def calculate_sample_weights_new(y_test, bins, scalar_y):
     hist = np.histogram(daily_frequency, bins)
 
     # delete final half of bins
-    # new_bins = np.delete(hist[1], [x for x in range(ceil(bins / 1.5), bins)])
-    # last_sum = sum(hist[0][floor(bins / 2) - 1:])
-    # new_freq = np.delete(hist[0], [x for x in range(ceil(bins / 1.5) - 1, bins)])
-    # new_freq = np.append(new_freq, last_sum)
-    # hist = (new_freq, new_bins)
-    # print(hist)
-    # bins = ceil(bins / 1.5)
+    if combine_flag:
+        new_bins = np.delete(hist[1], [x for x in range(ceil(bins / 1.5), bins)])
+        last_sum = sum(hist[0][floor(bins / 2) - 1:])
+        new_freq = np.delete(hist[0], [x for x in range(ceil(bins / 1.5) - 1, bins)])
+        new_freq = np.append(new_freq, last_sum)
+        hist = (new_freq, new_bins)
+        print(hist)
+        bins = ceil(bins / 1.5)
 
     sample_weights = []
     for daily_freq in daily_frequency:
@@ -311,7 +312,7 @@ def calculate_sample_weights_new(y_test, bins, scalar_y):
                 sample_weights.append(weight)
     return sample_weights
 
-def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 0, horizon=24):
+def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 0, horizon=24, combine_bins = False):
     # read in data
     x_train, y_train, x_test, y_test, scalar_y = read_pickle(file_name)
     invert_test = []
@@ -357,7 +358,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     sample_weights = []
     if weights_flag:
         # sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
-        sample_weights = calculate_sample_weights_new(y_train, weights_flag, scalar_y)
+        sample_weights = calculate_sample_weights_new(y_train, weights_flag, scalar_y, combine_bins)
 
     # print(sample_weights)
 
@@ -375,7 +376,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     if predict_lag:
         test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, predict_lag)
 
-    return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred
+    return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred, model
 
 def train_from_original_data(lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, run_time=False, num_cows=198):
     x_train, y_train, invert_train = create_test_train_data(cow_list, all_data_dict, lag, 24, 'train', run_time, num_cows, invert_diff)
@@ -615,37 +616,48 @@ def random_hyper_search():
     plt.show()
 
 def random_hyper_optimisation():
-    params = [120, 4096, 15, 64, 64, 128]
+    # params = [120, 409, 5, 64, 64, 128, 5]
+    params = [160, 2616, 20, 87, 32, 64, 7]
 
-    mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred = train_from_saved_data('normalised complete',
+    mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
                                                                                            lag=params[0],
                                                                                            batch_size=params[1],
                                                                                            epochs=params[2],
                                                                                            encoder_units=params[3],
                                                                                            decoder_units=params[4],
                                                                                            dense_neurons=params[5],
-                                                                                           weights_flag=1)
+                                                                                           weights_flag=params[6],
+                                                                                           predict_lag=6)
     error_metric = mean_RMSE
 
     while(True):
         random.seed()
         new_params = params.copy()
         for i in range(3):
-            rand_index = random.randint(0,5)
+            rand_index = random.randint(0,6)
             current = params[rand_index]
             rand_change = random.randint(ceil(-current/2), ceil(current/2))
+            if rand_change > 0:
+                rand_change = rand_change*2
             new_params[rand_index] = current + rand_change
 
+        # adjustment for lag above current data max
+        if new_params[0]>200:
+            new_params[0] = 200
+
         try:
-            mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred = train_from_saved_data('normalised complete', lag=new_params[0],
+            mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete', lag=new_params[0],
                                                                                 batch_size=new_params[1], epochs=new_params[2],
                                                                                 encoder_units=new_params[3],
                                                                                 decoder_units=new_params[4],
                                                                                 dense_neurons=new_params[5],
-                                                                                weights_flag=1)
+                                                                                weights_flag=new_params[6],
+                                                                                predict_lag=6)
             if mean_RMSE < error_metric:
-                    error_metric = mean_RMSE
-                    params = new_params
+                print('\n\nLOWER ERROR: NEW BASELINE MODEL\n\n')
+                error_metric = mean_RMSE
+                params = new_params
+                model.save('models/optimal_model')
 
         except:
             print('error')
@@ -685,7 +697,8 @@ cow_list = sorted(cow_list)
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 #
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
-train_from_saved_data('normalised fir', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
+# train_from_saved_data('normalised fir', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
+train_from_saved_data('normalised fir', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
 # train_from_saved_data('normalised complete', lag=163, batch_size=4096, epochs=35, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
 # train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
 # train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
@@ -708,4 +721,4 @@ train_from_saved_data('normalised fir', lag=120, batch_size=409, epochs=10, enco
 
 # random_hyper_search()
 
-# random_hyper_optimisation()
+random_hyper_optimisation()
