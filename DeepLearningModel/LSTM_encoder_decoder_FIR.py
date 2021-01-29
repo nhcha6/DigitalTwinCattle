@@ -453,7 +453,7 @@ weather_df.iloc[:,2:] = weather_df.iloc[:,2:].diff(axis=0)
 
 ################### TRAIN FROM ORIGINAL PICKLE #########################
 
-train_from_original_data(lag=120, batch_size=4096, epochs=1000, encoder_units=64, decoder_units=64, dense_neurons=128, diff=True)
+# train_from_original_data(lag=120, batch_size=4096, epochs=1000, encoder_units=64, decoder_units=64, dense_neurons=128, diff=True)
 
 ################################################################################
 

@@ -16,7 +16,7 @@ from keras.callbacks import EarlyStopping
 from keras import models
 import pickle
 import random
-from math import ceil
+from math import floor, ceil
 
 def create_test_train_data(cows, all_data, lags, horizon, test_train, run_time = False, num_cows = 198, invert_diff = False):
     # define test or train
@@ -245,7 +245,7 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     loss = 'mse'
     optimiser = adam(clipvalue=1)
     activation = 'relu'
-    callback = EarlyStopping(monitor='val_loss', patience=5)
+    callback = EarlyStopping(monitor='val_loss', patience=15)
 
     n_timesteps, n_features, n_outputs = train_x.shape[1], train_x.shape[2], train_y.shape[1]
     # reshape output into [samples, timesteps, features]
@@ -285,19 +285,28 @@ def calculate_sample_weights(y_test, constant, scalar_y):
         sample_weights.append(weight)
     return sample_weights
 
-def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 6):
+def calculate_sample_weights_new(y_test, bins, scalar_y):
+    daily_frequency = []
+    y_test = scalar_y.inverse_transform(y_test)
+    for y_sample in y_test:
+        # y_sample = scalar_y.inverse_transform(y_sample)
+        y_sample = y_sample.flatten()
+        daily_frequency.append(sum(y_sample))
+    hist = np.histogram(daily_frequency, bins)
+
+    sample_weights = []
+    for daily_freq in daily_frequency:
+        for i in range(0,bins):
+            if (daily_freq >= hist[1][i]) and daily_freq <= hist[1][i+1]:
+                weight = len(daily_frequency)/(2*hist[0][i])
+                sample_weights.append(weight)
+    return sample_weights
+
+def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 0, horizon=24):
     # read in data
     x_train, y_train, x_test, y_test = read_pickle(file_name)
     invert_test = []
     y_lag = []
-
-    # reduce size for tests
-    if num_cows != 198:
-        x_train = x_train[0:num_cows*899]
-        y_train = y_train[0:num_cows*899]
-        x_test = x_test[0:num_cows*899]
-        y_test = y_test[0:num_cows*899]
-
 
     print("\n")
     print("\n")
@@ -310,18 +319,23 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     print("\n")
     print("\n")
 
+    # reduce size for tests
+    if num_cows != 198:
+        x_train = x_train[0:num_cows*899]
+        y_train = y_train[0:num_cows*899]
+        x_test = x_test[0:num_cows*604]
+        y_test = y_test[0:num_cows*604]
+
+    # smaller prediction horizon
+    if horizon != 24:
+        y_train = y_train[:,0:horizon]
+        y_test = y_test[:,0:horizon]
+
     if lag!=200:
         x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
     if ignore_lags:
         x_train, x_test = edit_ignore_lags(x_train, x_test, ignore_lags)
-
-    if predict_lag:
-        y_lag = y_test[0:-6,0:6]
-        x_train = x_train[6:]
-        y_train = y_train[6:]
-        x_test = x_test[6:]
-        y_test = y_test[6:]
 
     scalar_y = MinMaxScaler()
     scalar_y.max_ = 61.24368378
@@ -332,7 +346,8 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
 
     sample_weights = []
     if weights_flag:
-        sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
+        # sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
+        sample_weights = calculate_sample_weights_new(y_train, weights_flag, scalar_y)
 
     # print(sample_weights)
 
@@ -348,7 +363,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test)
 
     if predict_lag:
-        test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, y_lag)
+        test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, predict_lag)
 
     return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred
 
@@ -407,7 +422,7 @@ def invert_differening(diff_seq, init):
 
     return second_inv[2:]
 
-def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_prev=[]):
+def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_prev=0):
     y_pred = model.predict(test_x)
 
     # error calc
@@ -418,7 +433,6 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_p
     hourly_errors = []
     daily_errors = []
     predictions = []
-
 
     # iter for doing only early morning analysis:
     iter = []
@@ -431,7 +445,7 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_p
             # iter.append(i + 2 + j)
 
     # for i in iter:
-    for sample_n in range(0, 604):
+    for sample_n in range(y_prev, 604):
         freq_actual_dict = {}
         freq_forecast_dict = {}
         for cow_n in range(0,num_cows):
@@ -453,21 +467,21 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_p
 
             # adjust prediction so that it only uses the first 18 samples, and uses the actually recorder previous 6
             # to make 24 hours.
-            if list(y_prev):
+            if y_prev:
                 # extract actual previous x values
-                y_prev_i = y_prev[i].reshape(-1,1)
-                no_prev = len(y_prev_i)
-                y_prev_orig = norm_y.inverse_transform(y_prev_i)
+                y_prev_actual = test_y[i-y_prev].reshape(-1,1)
+                y_prev_actual = norm_y.inverse_transform(y_prev_actual)
+                y_prev_actual = y_prev_actual[0:6]
 
                 # extract available previous x values
                 x_test_i = test_x[i]
-                x_prev = []
-                for i in range(-no_prev, 0):
-                    x_prev.append([x_test_i[i][0]])
-                x_prev_orig = norm_y.inverse_transform(x_prev)
+                y_prev_known = []
+                for j in range(-y_prev, 0):
+                    y_prev_known.append([x_test_i[j][0]])
+                y_prev_known = norm_y.inverse_transform(y_prev_known)
 
-                y_actual_orig = np.concatenate((y_prev_orig, y_actual_orig[0:-no_prev]))
-                y_pred_orig = np.concatenate((x_prev_orig, y_pred_orig[0:-no_prev]))
+                y_actual_orig = np.concatenate((y_prev_actual, y_actual_orig[0:-y_prev]))
+                y_pred_orig = np.concatenate((y_prev_known, y_pred_orig[0:-y_prev]))
 
             error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
             norm_error = error/max(y_actual_orig)
@@ -497,13 +511,14 @@ def test_error(model, test_x, test_y, norm_y, num_cows=198, invert_test = [],y_p
                     # plot = True
                     false_pos += 1
 
-            # plt.figure()
-            # print(error)
-            # print(daily_error)
-            # plt.plot(y_pred_orig, label='forecast')
-            # plt.plot(y_actual_orig, label='actual')
-            # plt.legend()
-            # plt.show()
+            if False:
+                plt.figure()
+                print(error)
+                print(daily_error)
+                plt.plot(y_pred_orig, label='forecast')
+                plt.plot(y_actual_orig, label='actual')
+                plt.legend()
+                plt.show()
 
         # calculate top 20:
         freq_forecast_df = pd.DataFrame.from_dict(freq_forecast_dict, orient='index').sort_values(by=[0], ascending=False)
@@ -658,11 +673,12 @@ cow_list = list(set(panting_model_df["Cow"]))
 cow_list = sorted(cow_list)
 
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
-
-# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=0)
-train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=1, predict_lag = 6)
-# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=2)
-
+#
+# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
+# train_from_saved_data('normalised complete', lag=163, batch_size=4096, epochs=35, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
+train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
+train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
+train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
 #################################################################################
 
 ################### TRAIN FROM ORIGINAL PICKLE #########################
