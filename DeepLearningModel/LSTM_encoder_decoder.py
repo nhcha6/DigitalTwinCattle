@@ -212,10 +212,10 @@ def read_pickle(folder):
         y_train = pickle.load(f)
     with open(folder + '/y_test.pkl', 'rb') as f:
         y_test = pickle.load(f)
-    # with open(folder + '/scalar_y.pkl', 'rb') as f:
-    #     invert_test = pickle.load(f)
+    with open(folder + '/scalar_y.pkl', 'rb') as f:
+        scalar_y = pickle.load(f)
 
-    return x_train, y_train, x_test, y_test
+    return x_train, y_train, x_test, y_test, scalar_y
 
 def edit_num_lags(train_x, test_x, new_lag):
     train_x = reduce_lags(new_lag, train_x)
@@ -294,6 +294,15 @@ def calculate_sample_weights_new(y_test, bins, scalar_y):
         daily_frequency.append(sum(y_sample))
     hist = np.histogram(daily_frequency, bins)
 
+    # delete final half of bins
+    # new_bins = np.delete(hist[1], [x for x in range(ceil(bins / 1.5), bins)])
+    # last_sum = sum(hist[0][floor(bins / 2) - 1:])
+    # new_freq = np.delete(hist[0], [x for x in range(ceil(bins / 1.5) - 1, bins)])
+    # new_freq = np.append(new_freq, last_sum)
+    # hist = (new_freq, new_bins)
+    # print(hist)
+    # bins = ceil(bins / 1.5)
+
     sample_weights = []
     for daily_freq in daily_frequency:
         for i in range(0,bins):
@@ -304,7 +313,7 @@ def calculate_sample_weights_new(y_test, bins, scalar_y):
 
 def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, ignore_lags=False, num_cows = 198, weights_flag=0, predict_lag = 0, horizon=24):
     # read in data
-    x_train, y_train, x_test, y_test = read_pickle(file_name)
+    x_train, y_train, x_test, y_test, scalar_y = read_pickle(file_name)
     invert_test = []
     y_lag = []
 
@@ -316,6 +325,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     print("decoder_units: " + str(decoder_units))
     print("dense_neurons: " + str(dense_neurons))
     print("epochs: " + str(epochs))
+    print("sample weights bins: " + str(weights_flag))
     print("\n")
     print("\n")
 
@@ -337,12 +347,12 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     if ignore_lags:
         x_train, x_test = edit_ignore_lags(x_train, x_test, ignore_lags)
 
-    scalar_y = MinMaxScaler()
-    scalar_y.max_ = 61.24368378
-    scalar_y.max_ = -7.45523883
-    scalar_y.min_ = 0.10852046
-    scalar_y.scale_ = 0.01455627
-    scalar_y.data_range_ = 68.69892261
+    # scalar_y = MinMaxScaler()
+    # scalar_y.max_ = 61.24368378
+    # scalar_y.max_ = -7.45523883
+    # scalar_y.min_ = 0.10852046
+    # scalar_y.scale_ = 0.01455627
+    # scalar_y.data_range_ = 68.69892261
 
     sample_weights = []
     if weights_flag:
@@ -675,10 +685,11 @@ cow_list = sorted(cow_list)
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 #
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
+train_from_saved_data('normalised fir', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
 # train_from_saved_data('normalised complete', lag=163, batch_size=4096, epochs=35, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
-train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
-train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
-train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
+# train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
+# train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
+# train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
 #################################################################################
 
 ################### TRAIN FROM ORIGINAL PICKLE #########################
