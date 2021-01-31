@@ -245,7 +245,7 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     loss = 'mse'
     optimiser = adam(clipvalue=1)
     activation = 'relu'
-    callback = EarlyStopping(monitor='val_loss', patience=15)
+    # callback = EarlyStopping(monitor='val_loss', patience=10)
 
     n_timesteps, n_features, n_outputs = train_x.shape[1], train_x.shape[2], train_y.shape[1]
     # reshape output into [samples, timesteps, features]
@@ -262,9 +262,9 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     model.compile(loss=loss, optimizer=optimiser)
     # fit network
     if sample_weights:
-        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback], sample_weight=np.array(sample_weights))
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, sample_weight=np.array(sample_weights))
     else:
-        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback])
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose)
     return model, history
 
 def calculate_sample_weights(y_test, constant, scalar_y):
@@ -617,7 +617,7 @@ def random_hyper_search():
 
 def random_hyper_optimisation():
     # params = [120, 409, 5, 64, 64, 128, 5]
-    params = [160, 2616, 20, 87, 32, 64, 7]
+    params = [200, 128, 80, 128, 64, 64, 7]
 
     mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
                                                                                            lag=params[0],
@@ -634,16 +634,16 @@ def random_hyper_optimisation():
         random.seed()
         new_params = params.copy()
         for i in range(3):
-            rand_index = random.randint(0,6)
+            rand_index = random.randint(1,6)
             current = params[rand_index]
             rand_change = random.randint(ceil(-current/2), ceil(current/2))
             if rand_change > 0:
                 rand_change = rand_change*2
             new_params[rand_index] = current + rand_change
 
-        # adjustment for lag above current data max
-        if new_params[0]>200:
-            new_params[0] = 200
+        # # adjustment for lag above current data max
+        # if new_params[0]>200:
+        #     new_params[0] = 200
 
         try:
             mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete', lag=new_params[0],
@@ -698,7 +698,7 @@ cow_list = sorted(cow_list)
 #
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
 # train_from_saved_data('normalised fir', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, ignore_lags = 0, num_cows=3, weights_flag=5, predict_lag=6)
-train_from_saved_data('normalised fir', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
+# train_from_saved_data('normalised fir', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
 # train_from_saved_data('normalised complete', lag=163, batch_size=4096, epochs=35, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24)
 # train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
 # train_from_saved_data('normalised complete', lag=120, batch_size=2616, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, ignore_lags = 0, weights_flag=5, horizon = 24, predict_lag=6)
