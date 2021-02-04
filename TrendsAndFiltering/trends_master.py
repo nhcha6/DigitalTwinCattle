@@ -11,10 +11,14 @@ cow_category = "All"
 
 # store cow info in dataframe
 cow_details_df = pd.read_csv(data_dir + animal_info_name)
+
+
 # sort cow IDs into categories using dictionaries
 breed_dict = create_category_dict("Breed", "Tag#", cow_details_df)
 coat_dict = create_category_dict("Coat colour", "Tag#", cow_details_df)
 docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
+
+
 
 #################################################################
 
