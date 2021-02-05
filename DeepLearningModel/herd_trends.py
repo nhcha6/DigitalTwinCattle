@@ -122,12 +122,17 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_
     samples_per_cow = int(test_x.shape[0]/num_cows)
 
     # error calc
-    false_pos = 0
-    false_neg = 0
-    total_pos = 0
-    total_neg = 0
+    false_pos_freq = 0
+    false_neg_freq = 0
+    total_pos_freq = 0
+    total_neg_freq = 0
+    false_pos_max = 0
+    false_neg_max = 0
+    total_pos_max = 0
+    total_neg_max = 0
     hourly_errors = []
     daily_errors = []
+    max_errors = []
     predictions = []
 
     # iter for doing only early morning analysis:
@@ -156,11 +161,6 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_
             # plt.plot(y_actual_orig, label='actual')
             # plt.legend()
 
-            # take difference if required
-            if invert_test:
-                y_actual_orig = invert_differening(y_actual_orig, invert_test[i])
-                y_pred_orig = invert_differening(y_pred_orig, invert_test[i])
-
             # adjust prediction so that it only uses the first 18 samples, and uses the actually recorder previous 6
             # to make 24 hours.
             if y_prev:
@@ -186,28 +186,44 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_
             # calculate frequencies
             freq_actual = sum(y_actual_orig)
             freq_forecast = sum(y_pred_orig)
+            max_actual = max(y_actual_orig)
+            max_forecast = max(y_pred_orig)
 
             # error in frequency prediction
             daily_error = abs(freq_actual - freq_forecast)
             freq_actual_dict[cow_n] = freq_actual
             freq_forecast_dict[cow_n] = freq_forecast
+            max_error = abs(max_actual - max_forecast)
 
             # if max(y_actual_orig) > 1:
             if True:
                 hourly_errors.append(norm_error)
                 daily_errors.append(daily_error)
+                max_errors.append(max_error)
 
-            # calculate false positive and false negative above and below threshold
+            # calculate false positive and false negative above and below daily threshold
             if freq_actual > 158:
-                total_pos += 1
+                total_pos_freq += 1
                 if freq_forecast < 158:
                     # plot = True
-                    false_neg += 1
+                    false_neg_freq += 1
             else:
-                total_neg += 1
+                total_neg_freq += 1
                 if freq_forecast > 158:
                     # plot = True
-                    false_pos += 1
+                    false_pos_freq += 1
+
+            # calculate false positive and false negative above and below daily threshold
+            if max_actual > 12:
+                total_pos_max += 1
+                if max_forecast < 12:
+                    # plot = True
+                    false_neg_max += 1
+            else:
+                total_neg_max += 1
+                if max_forecast > 12:
+                    # plot = True
+                    false_pos_max += 1
 
             if plot:
                 plt.figure()
@@ -226,24 +242,39 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_
         top_20_predicted = [x for x in top_20_forecast if x in top_20_actual]
         predictions.append(len(top_20_predicted))
 
+    # calculate summary errors
+    mean_hourly_RMSE = np.mean(hourly_errors)
+    RMSE_daily_freq = np.mean(daily_errors)
+    RMSE_max = np.mean(max_errors)
+    false_pos_freq_total = false_pos_freq/total_neg_freq
+    false_neg_freq_total = false_neg_freq/total_pos_freq
+    false_pos_max_total = false_pos_max/total_neg_max
+    false_neg_max_total = false_neg_max/total_pos_max
+
     print("\n")
     print("\n")
-    print("\nMEAN HOURLY RMSE  TEST DATA")
-    print(np.mean(hourly_errors))
-    print("\nRMSE DAILY ERROR TEST DATA")
-    print(np.mean(daily_errors))
-    print("\nMEAN TOP 20 PREDICTED TEST DATA")
-    print(np.mean(predictions))
-    print("\nFALSE POS TEST DATA")
-    print(false_pos/total_neg)
-    print("\nFALSE NEG TEST DATA")
-    print(false_neg/total_pos)
+    print("\nMEAN HOURLY RMSE")
+    print(mean_hourly_RMSE)
+    print("\nRMSE DAILY FREQ")
+    print(RMSE_daily_freq)
+    print("\nRMSE MAX ERROR")
+    print(RMSE_max)
+    # print("\nMEAN TOP 20 PREDICTED")
+    # print(np.mean(predictions))
+    print("\nFALSE POS DAILY FREQ")
+    print(false_pos_freq_total)
+    print("\nFALSE NEG DAILY FREQ")
+    print(false_neg_freq_total)
+    print("\nFALSE POS MAX")
+    print(false_pos_max_total)
+    print("\nFALSE NEG MAX")
+    print(false_neg_max_total)
     print("\n")
     print("\n")
 
-    return np.mean(hourly_errors), false_pos/total_neg, false_neg/total_pos, np.mean(daily_errors), np.mean(predictions)
+    return mean_hourly_RMSE, RMSE_daily_freq, false_pos_freq_total, false_neg_freq_total, RMSE_max, false_pos_max_total, false_neg_max_total
 
-def herd_trends(y_pred, x_test, y_test, plot=False):
+def herd_trends(y_pred, x_test, y_test, scalar_y, plot=False):
     # get cow details
     cleaned_cows = ['8022015', '8022034', '8022073', '8022092', '8022445', '8026043', '8026045', '8026047', '8026066',
                     '8026106', '8026154', '8026216', '8026243', '8026280', '8026304', '8026319', '8026428', '8026499',
@@ -276,9 +307,14 @@ def herd_trends(y_pred, x_test, y_test, plot=False):
     x_test = x_test[0]
     samples_per_cow = int(x_test.shape[0] / num_cows)
 
+
     # errors per sample
     coat_errors = {"Red": [], "Black": [], "Tan": [], "White": []}
     breed_errors = {"39%": [], "0%": [], "50%": []}
+    coat_daily_actual = {"Red": [], "Black": [], "Tan": [], "White": []}
+    coat_daily_forecast = {"Red": [], "Black": [], "Tan": [], "White": []}
+    breed_daily_actual = {"39%": [], "0%": [], "50%": []}
+    breed_daily_forecast = {"39%": [], "0%": [], "50%": []}
     # for i in iter:
     for sample_n in range(0, samples_per_cow):
         # prediction dictionaries for this sample
@@ -323,6 +359,11 @@ def herd_trends(y_pred, x_test, y_test, plot=False):
             # append error
             error = mean_squared_error(mean_actual, mean_pred, squared=False)
             coat_errors[coat].append(error)
+            # update daily average dict
+            if (sample_n+20)%24==0:
+                coat_daily_actual[coat].append(mean_actual)
+                coat_daily_forecast[coat].append(mean_pred)
+
 
             # plot individual
             if plot:
@@ -349,6 +390,10 @@ def herd_trends(y_pred, x_test, y_test, plot=False):
             # append error
             error = mean_squared_error(mean_actual, mean_pred, squared=False)
             breed_errors[breed].append(error)
+            # update daily average dict
+            if (sample_n + 20) % 24 == 0:
+                breed_daily_actual[breed].append(mean_actual)
+                breed_daily_forecast[breed].append(mean_pred)
 
             if plot:
                 plt.title('Breed Actual')
@@ -367,35 +412,136 @@ def herd_trends(y_pred, x_test, y_test, plot=False):
         if plot:
             plt.show()
 
+    # generate average prediction plots
+    plt.figure()
+    for breed in breed_daily_forecast.keys():
+        mean_pred_daily = np.mean(np.array(breed_daily_forecast[breed]), axis=0)
+        plt.title('Breed Predicted Average')
+        plt.plot(mean_pred_daily, label=breed + ' predicted')
+        plt.legend()
+
+    plt.figure()
+    for breed in breed_daily_actual.keys():
+        mean_actual_daily = np.mean(np.array(breed_daily_actual[breed]), axis=0)
+        plt.title('Breed Actual Average')
+        plt.plot(mean_actual_daily, label=breed + ' predicted')
+        plt.legend()
+
+    plt.figure()
+    for coat in coat_daily_forecast.keys():
+        mean_pred_daily = np.mean(np.array(coat_daily_forecast[coat]), axis=0)
+        plt.title('Coat Predicted Average')
+        plt.plot(mean_pred_daily, label=coat + ' predicted')
+        plt.legend()
+
+    plt.figure()
+    for coat in coat_daily_actual.keys():
+        mean_actual_daily = np.mean(np.array(coat_daily_actual[coat]), axis=0)
+        plt.title('Coat Actual Average')
+        plt.plot(mean_actual_daily, label=coat + ' predicted')
+        plt.legend()
+    plt.show()
+
     print("\n\nErrors")
+    error_list = []
     for coat in coat_errors.keys():
         mean_error = np.mean(np.array(coat_errors[coat]))
+        error_list.append(mean_error)
         print(coat + ": " + str(mean_error))
 
     for breed in breed_errors.keys():
         mean_error = np.mean(np.array(breed_errors[breed]))
+        error_list.append(mean_error)
         print(breed + ": " + str(mean_error))
+
+    mean_herd_error = np.mean(error_list)
+    print("Herd: " + str(mean_herd_error))
     print('\n\n')
 
+    return mean_herd_error
 
-# extract model data
-model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', 'model checkpoints/batch_size256-100.hdf5')
+def compare_model_errors():
+    error_summary = []
+    for batch_size in [128]:
+        # for epochs in [50]:
+        for epochs in [50, 100, 150, 200, 250, 300]:
+            print('\nBatch Size: ' + str(batch_size))
+            print('Epochs: ' + str(epochs))
+            model_name = 'model checkpoints/batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
 
-# predict
-print("Making Predictions")
-y_pred = model.predict(x_test)
+            # extract model data
+            model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', model_name)
 
-# edit data to suit model
-# x_train, y_train, x_test, y_test = edit_train_test(x_train, y_train, x_test, y_test, 24, 120)
-# print('writing data')
-# write_pickle(x_train, y_train, x_test, y_test, scalar_y)
+            # predict
+            print("Making Predictions")
+            y_pred = model.predict(x_test)
 
-print("Entire Error")
-test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+            # edit data to suit model
+            # x_train, y_train, x_test, y_test = edit_train_test(x_train, y_train, x_test, y_test, 24, 120)
+            # print('writing data')
+            # write_pickle(x_train, y_train, x_test, y_test, scalar_y)
 
-print("Error Ignoring First 6 Hours")
-# test_error(y_pred, x_test, y_test, scalar_y, y_prev=6)
+            print("Entire Error")
+            mean_hourly_RMSE, RMSE_daily_freq, false_pos_freq_total, false_neg_freq_total, RMSE_max, false_pos_max_total, false_neg_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False)
 
-print("Herd Error")
-# herd_trends(y_pred, x_test, y_test, True)
+            # print("Error Ignoring First 6 Hours")
+            # test_error(y_pred, x_test, y_test, scalar_y, y_prev=6)
 
+            print("Herd Error")
+            mean_herd_error = herd_trends(y_pred, x_test, y_test, scalar_y, False)
+
+            error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, false_pos_freq_total, false_neg_freq_total, RMSE_max, false_pos_max_total, false_neg_max_total, mean_herd_error])
+
+    error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'daily freq fp', 'daily freq fn', 'max RMSE', 'max fp', 'max fn', 'mean herd RMSE'])
+    print(error_summary_df)
+    error_summary_df.to_pickle('model checkpoints/error_summary_2.pkl')
+
+def plot_model_error(error_df):
+    for error_type in ['mean hourly RMSE', 'daily freq RMSE', 'daily freq fp', 'daily freq fn', 'max RMSE', 'max fp','max fn', 'mean herd RMSE']:
+        plt.figure()
+        # plot for different epochs
+        for batch_size in [128,256,512]:
+            batch_error = error_df[error_df['batch size']==batch_size]
+            x = batch_error['epochs'].values
+            y = batch_error[error_type].values
+            plt.title(error_type)
+            plt.plot(x,y,label = 'batch size: ' + str(batch_size))
+        plt.legend()
+
+        # plot for different epochs
+        plt.figure()
+        for epoch in [50, 100, 150, 200, 250, 300]:
+            epoch_error = error_df[error_df['epochs']==epoch]
+            x = epoch_error['batch size'].values
+            y = epoch_error[error_type].values
+            plt.title(error_type)
+            plt.plot(x,y,label = 'epoch: ' + str(epoch))
+        plt.legend()
+
+
+    plt.show()
+
+def summarise_herd_trends(model_name):
+    # extract model data
+    model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', model_name)
+
+    # predict
+    print("Making Predictions")
+    y_pred = model.predict(x_test)
+
+    print("Herd Error")
+    mean_herd_error = herd_trends(y_pred, x_test, y_test, scalar_y, False)
+
+
+# summarise_herd_trends('model checkpoints/batch_size256-100.hdf5')
+
+# compare_model_errors()
+
+error_df = pd.read_pickle('model checkpoints/error_summary.pkl')
+error_df = error_df[(error_df['batch size']!=128) | (error_df['epochs']!=200)]
+error_df = error_df.sort_values(by=['batch size', 'epochs'])
+with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+    print(error_df)
+# error_df = pd.concat([error_df, pd.read_pickle('model checkpoints/error_summary_2.pkl')])
+# error_df.to_pickle('model checkpoints/error_summary.pkl')
+plot_model_error(error_df)
