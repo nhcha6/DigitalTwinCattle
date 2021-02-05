@@ -9,7 +9,7 @@ from keras.layers import Dense
 from keras.layers import Flatten
 from keras.layers import LSTM
 from keras.layers import RepeatVector
-from keras.layers import TimeDistributed, Dropout
+from keras.layers import TimeDistributed, Dropout, MaxPooling1D, AveragePooling1D
 from keras import regularizers
 from keras import Input
 from keras import Model
@@ -292,6 +292,107 @@ def build_forecast_model(train_x, train_y, test_x, test_y, batch_size, epochs, e
         history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
     return model, history
 
+def build_daily_max_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[]):
+    # define hyper-parameters to be optimised
+    verbose = 1
+    loss = 'mse'
+    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm)
+    activation = 'relu'
+    # callback = EarlyStopping(monitor='val_loss', patience=10)
+    filepath = "model checkpoints/batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    callback_nan = TerminateOnNaN()
+
+    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
+    # reshape output into [samples, timesteps, features]
+    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
+    test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
+
+    # define model
+    encoder_input = Input(shape=(n_timesteps, n_features))
+    forecast_input = Input(shape=(24,1))
+    l2_reg = regularizers.l2(0)
+    # l2_reg = regularizers.l2(0.01)
+    encoder_layer_1 = LSTM(encoder_units, activation=activation, kernel_regularizer=l2_reg, kernel_initializer=Orthogonal())
+    encoder_hidden_output = encoder_layer_1(encoder_input)
+    # encoder_layer_2 = LSTM(encoder_units, activation=activation, kernel_regularizer=l2_reg)
+    # encoder_output = encoder_layer_2(encoder_hidden_output)
+    decoder_input = RepeatVector(24)(encoder_hidden_output)
+    decoder_input = Dropout(0.2)(decoder_input)
+    decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+    # model.add(RepeatVector(n_outputs))
+    decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_regularizer=l2_reg, kernel_initializer=Orthogonal())
+    decoder_output = decoder_layer(decoder_input)
+    # model.add(LSTM(decoder_units, activation=activation, return_sequences=True))
+    dense_input = Dropout(0.2)(decoder_output)
+    dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
+    dense_output = dense_layer(dense_input)
+    outputs = TimeDistributed(Dense(1))(dense_output)
+    outputs = MaxPooling1D(pool_size=24)(outputs)
+    # model.add(TimeDistributed(Dense(dense_neurons, activation=activation)))
+    # model.add(TimeDistributed(Dense(1)))
+
+    model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
+    print(model.summary())
+    model.compile(loss=loss, optimizer=optimiser)
+    # fit network
+    if sample_weights:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, sample_weight=np.array(sample_weights), callbacks=[callback_model, callback_nan])
+    else:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
+    return model, history
+
+def build_daily_ave_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[]):
+    # define hyper-parameters to be optimised
+    verbose = 1
+    loss = 'mse'
+    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm)
+    activation = 'relu'
+    # callback = EarlyStopping(monitor='val_loss', patience=10)
+    filepath = "model checkpoints/batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    callback_nan = TerminateOnNaN()
+
+    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
+    # reshape output into [samples, timesteps, features]
+    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
+    test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
+
+    # define model
+    encoder_input = Input(shape=(n_timesteps, n_features))
+    forecast_input = Input(shape=(24,1))
+    l2_reg = regularizers.l2(0)
+    # l2_reg = regularizers.l2(0.01)
+    encoder_layer_1 = LSTM(encoder_units, activation=activation, kernel_regularizer=l2_reg, kernel_initializer=Orthogonal())
+    encoder_hidden_output = encoder_layer_1(encoder_input)
+    # encoder_layer_2 = LSTM(encoder_units, activation=activation, kernel_regularizer=l2_reg)
+    # encoder_output = encoder_layer_2(encoder_hidden_output)
+    decoder_input = RepeatVector(24)(encoder_hidden_output)
+    decoder_input = Dropout(0.2)(decoder_input)
+    decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+    # model.add(RepeatVector(n_outputs))
+    decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_regularizer=l2_reg, kernel_initializer=Orthogonal())
+    decoder_output = decoder_layer(decoder_input)
+    # model.add(LSTM(decoder_units, activation=activation, return_sequences=True))
+    dense_input = Dropout(0.2)(decoder_output)
+    dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
+    dense_output = dense_layer(dense_input)
+    outputs = TimeDistributed(Dense(1))(dense_output)
+    outputs = AveragePooling1D(pool_size=24)(outputs)
+    # model.add(TimeDistributed(Dense(dense_neurons, activation=activation)))
+    # model.add(TimeDistributed(Dense(1)))
+
+    model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
+    print(model.summary())
+    model.compile(loss=loss, optimizer=optimiser)
+    # fit network
+    if sample_weights:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, sample_weight=np.array(sample_weights), callbacks=[callback_model, callback_nan])
+    else:
+        history = model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
+    return model, history
+
+
 def build_original_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, sample_weights=[]):
     # define hyper-parameters to be optimised
     verbose = 1
@@ -397,6 +498,18 @@ def add_forecast_input(train_x, train_y, test_x, test_y, num_cows):
     test_x_comb = [np.array(test_x), np.array(new_test_x)]
     return train_x_comb, train_y, test_x_comb, test_y
 
+def add_max_y(y):
+    y_new = []
+    for y_sample in y:
+        y_new.append([max(y_sample)])
+    return np.array(y_new)
+
+def add_ave_y(y):
+    y_new = []
+    for y_sample in y:
+        y_new.append([np.mean(y_sample)])
+    return np.array(y_new)
+
 def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, num_cows = 197, weights_flag=0, predict_lag = 0, horizon=24, learning_rate = 0.001, clipnorm=0.01, combine_bins = False, model_name = 'forecast'):
     # read in data
     x_train, y_train, x_test, y_test, scalar_y = read_pickle(file_name)
@@ -443,26 +556,39 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     # scalar_y.scale_ = 0.01455627
     # scalar_y.data_range_ = 68.69892261
 
-    if model_name == 'forecast':
+    if model_name in ['forecast', 'max', 'ave']:
         x_train, y_train, x_test, y_test = add_forecast_input(x_train, y_train, x_test, y_test, num_cows)
-        # print(x_train[0][101])
-        # print(x_train[1][100])
 
     sample_weights = []
     if weights_flag:
         # sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
         sample_weights = calculate_sample_weights_new(y_train, weights_flag, scalar_y, combine_bins)
 
+    if model_name == 'max':
+        y_train = add_max_y(y_train)
+        y_test = add_max_y(y_test)
+
+    if model_name == 'ave':
+        y_train = add_ave_y(y_train)
+        y_test = add_ave_y(y_test)
+
+    print(y_train)
+
     if model_name == 'forecast':
         model, history = build_forecast_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights)
     elif model_name == 'original':
         model, history = build_original_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, sample_weights)
+    elif model_name == 'max':
+        model, history = build_daily_max_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights)
+    elif model_name == 'ave':
+        model, history = build_daily_ave_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights)
 
-    # model.save('models/' + file_name)
-    mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, model_type=model_name)
+    if model_name in ["forecast", "original"]:
+        # model.save('models/' + file_name)
+        mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, model_type=model_name)
 
-    if predict_lag:
-        test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, predict_lag, model_type=model_name)
+        if predict_lag:
+            test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, predict_lag, model_type=model_name)
 
     return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred, model
 
@@ -777,7 +903,8 @@ cow_list = sorted(cow_list)
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 #
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, num_cows=10, weights_flag=7, predict_lag=6, model_name='original')
-# train_from_saved_data('normalised complete', lag=120, batch_size=16, epochs=10, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='forecast')
+# train_from_saved_data('normalised complete', lag=120, batch_size=16, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='ave')
+# train_from_saved_data('normalised complete', lag=120, batch_size=16, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='max')
 # train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=50, encoder_units=16, decoder_units=32, dense_neurons=24, weights_flag=7, horizon=24, predict_lag=6, learning_rate=0.1, clipnorm=0.001, num_cows=5, model_name='forecast')
 
 # train_from_saved_data('normalised complete', lag=120, batch_size=128, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, weights_flag=7, horizon = 24, predict_lag=6, model_name='original')
@@ -803,33 +930,36 @@ cow_list = sorted(cow_list)
 # random_hyper_search()
 
 # random_hyper_optimisation()
-#
-# best_RMSE = 1000
+
+best_RMSE = 1000
+# orig learning rates
 # batch_dict = {512: 0.0005, 256: 0.0005, 128: 0.0002, 64: 0.0001, 32: 0.00005}
-# for batch_size, lr in batch_dict.items():
-#     while(True):
-#         try:
-#             mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
-#                                                                                                       lag=120,
-#                                                                                                       batch_size=batch_size,
-#                                                                                                       epochs=300,
-#                                                                                                       encoder_units=32,
-#                                                                                                       decoder_units=64,
-#                                                                                                       dense_neurons=48,
-#                                                                                                       weights_flag=7,
-#                                                                                                       horizon=24,
-#                                                                                                       learning_rate=lr,
-#                                                                                                       clipnorm=0.001,
-#                                                                                                       predict_lag=6,
-#                                                                                                       model_name='forecast')
-#
-#             if mean_RMSE<best_RMSE:
-#                 best_RMSE = mean_RMSE
-#                 model.save('models/optimal_model')
-#
-#             break
-#
-#         except:
-#             print("Error")
-#             lr = lr/2
+# lower learning rates
+batch_dict = {128: 0.0001, 64: 0.00005, 32: 0.00002}
+for batch_size, lr in batch_dict.items():
+    while(True):
+        try:
+            mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
+                                                                                                      lag=120,
+                                                                                                      batch_size=batch_size,
+                                                                                                      epochs=300,
+                                                                                                      encoder_units=32,
+                                                                                                      decoder_units=64,
+                                                                                                      dense_neurons=48,
+                                                                                                      weights_flag=7,
+                                                                                                      horizon=24,
+                                                                                                      learning_rate=lr,
+                                                                                                      clipnorm=0.001,
+                                                                                                      predict_lag=6,
+                                                                                                      model_name='forecast')
+
+            if mean_RMSE<best_RMSE:
+                best_RMSE = mean_RMSE
+                model.save('models/optimal_model')
+
+            break
+
+        except:
+            print("Error")
+            lr = lr/2
 
