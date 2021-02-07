@@ -182,6 +182,9 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_
             error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
             # norm_error = error/max(y_actual_orig)
             norm_error = error
+            # if error > 50:
+            #     print(error)
+            #     continue
 
             # calculate frequencies
             freq_actual = sum(y_actual_orig)
@@ -462,9 +465,13 @@ def herd_trends(y_pred, x_test, y_test, scalar_y, plot=False):
 
 def compare_model_errors():
     error_summary = []
-    for batch_size in [128]:
+    for batch_size in [32, 64,128]:
         # for epochs in [50]:
         for epochs in [50, 100, 150, 200, 250, 300]:
+            if batch_size == 32:
+                if epochs>150:
+                    continue
+
             print('\nBatch Size: ' + str(batch_size))
             print('Epochs: ' + str(epochs))
             model_name = 'model checkpoints/batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
@@ -494,7 +501,7 @@ def compare_model_errors():
 
     error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'daily freq fp', 'daily freq fn', 'max RMSE', 'max fp', 'max fn', 'mean herd RMSE'])
     print(error_summary_df)
-    error_summary_df.to_pickle('model checkpoints/error_summary_2.pkl')
+    error_summary_df.to_pickle('model checkpoints/error_summary.pkl')
 
 def plot_model_error(error_df):
     for error_type in ['mean hourly RMSE', 'daily freq RMSE', 'daily freq fp', 'daily freq fn', 'max RMSE', 'max fp','max fn', 'mean herd RMSE']:
@@ -505,6 +512,8 @@ def plot_model_error(error_df):
             x = batch_error['epochs'].values
             y = batch_error[error_type].values
             plt.title(error_type)
+            plt.xlabel('epochs')
+            plt.ylabel('error')
             plt.plot(x,y,label = 'batch size: ' + str(batch_size))
         plt.legend()
 
@@ -515,6 +524,8 @@ def plot_model_error(error_df):
             x = epoch_error['batch size'].values
             y = epoch_error[error_type].values
             plt.title(error_type)
+            plt.xlabel('batch size')
+            plt.ylabel('error')
             plt.plot(x,y,label = 'epoch: ' + str(epoch))
         plt.legend()
 
@@ -537,7 +548,7 @@ def summarise_herd_trends(model_name):
 
 # compare_model_errors()
 
-error_df = pd.read_pickle('model checkpoints/error_summary.pkl')
+error_df = pd.read_pickle('model checkpoints orig/error_summary.pkl')
 error_df = error_df[(error_df['batch size']!=128) | (error_df['epochs']!=200)]
 error_df = error_df.sort_values(by=['batch size', 'epochs'])
 with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
@@ -545,3 +556,14 @@ with pd.option_context('display.max_rows', None, 'display.max_columns', None):  
 # error_df = pd.concat([error_df, pd.read_pickle('model checkpoints/error_summary_2.pkl')])
 # error_df.to_pickle('model checkpoints/error_summary.pkl')
 plot_model_error(error_df)
+
+
+# extract model data
+# model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', 'model checkpoints orig/batch_size128-200.hdf5')
+#
+# # predict
+# print("Making Predictions")
+# y_pred = model.predict(x_test)
+#
+# test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+

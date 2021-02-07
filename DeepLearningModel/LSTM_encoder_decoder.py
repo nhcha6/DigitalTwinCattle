@@ -446,8 +446,10 @@ def calculate_sample_weights_new(y_test, bins, scalar_y, combine_flag):
     for y_sample in y_test:
         # y_sample = scalar_y.inverse_transform(y_sample)
         y_sample = y_sample.flatten()
-        daily_frequency.append(sum(y_sample))
+        daily_frequency.append(max(y_sample))
     hist = np.histogram(daily_frequency, bins)
+
+    print(hist)
 
     # delete final half of bins
     if combine_flag:
@@ -590,7 +592,14 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         if predict_lag:
             test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, predict_lag, model_type=model_name)
 
-    return mean_RMSE, false_pos, false_neg, epochs, mean_RMSE, mean_pred, model
+    if model_name in ["max", "ave"]:
+        false_pos, false_neg, mean_RMSE = test_max_ave_error(model, x_test, y_test, scalar_y, num_cows, model_type=model_name)
+        epochs = None
+        daily_RMSE = None
+        mean_pred = None
+
+
+    return mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model
 
 def train_from_original_data(lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, run_time=False, num_cows=197):
     x_train, y_train, invert_train = create_test_train_data(cow_list, all_data_dict, lag, 24, 'train', run_time, num_cows, invert_diff)
@@ -776,6 +785,109 @@ def test_error(model, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_p
 
     return np.mean(hourly_errors), false_pos/total_neg, false_neg/total_pos, np.mean(daily_errors), np.mean(predictions)
 
+def test_max_ave_error(model, test_x, test_y, norm_y, num_cows=197, model_type='max'):
+    y_pred = model.predict(test_x)
+
+    test_x = test_x[0]
+
+    samples_per_cow = int(test_x.shape[0]/num_cows)
+
+    # error calc
+    false_pos = 0
+    false_neg = 0
+    total_pos = 0
+    total_neg = 0
+    daily_errors = []
+
+
+    # iter for doing only early morning analysis:
+    iter = []
+    for j in range(0, 119592, samples_per_cow):
+        for i in range(5, 604, 24):
+            # iter.append(i - 2 + j)
+            # iter.append(i - 1 + j)
+            iter.append(i + j)
+            # iter.append(i + 1 + j)
+            # iter.append(i + 2 + j)
+
+    # for i in iter:
+    for sample_n in range(0, samples_per_cow):
+        for cow_n in range(0,num_cows):
+            # extract prediction
+            i = sample_n + cow_n*samples_per_cow
+            y_pred_orig = norm_y.inverse_transform(y_pred[i])
+            test_y_i = test_y[i].reshape(-1,1)
+            y_actual_orig = norm_y.inverse_transform(test_y_i)
+
+            # plt.figure()
+            # plt.plot(y_pred_orig, label='forecast')
+            # plt.plot(y_actual_orig, label='actual')
+            # plt.legend()
+
+            # adjust prediction so that it only uses the first 18 samples, and uses the actually recorder previous 6
+            # to make 24 hours.
+            # if y_prev:
+            #     # extract actual previous x values
+            #     y_prev_actual = test_y[i-y_prev].reshape(-1,1)
+            #     y_prev_actual = norm_y.inverse_transform(y_prev_actual)
+            #     y_prev_actual = y_prev_actual[0:6]
+            #
+            #     # extract available previous x values
+            #     x_test_i = test_x[i]
+            #     y_prev_known = []
+            #     for j in range(-y_prev, 0):
+            #         y_prev_known.append([x_test_i[j][0]])
+            #     y_prev_known = norm_y.inverse_transform(y_prev_known)
+            #
+            #     y_actual_orig = np.concatenate((y_prev_actual, y_actual_orig[0:-y_prev]))
+            #     y_pred_orig = np.concatenate((y_prev_known, y_pred_orig[0:-y_prev]))
+
+            if model_type == 'ave':
+                predicted = y_pred_orig[0][0]*24
+                actual = y_actual_orig[0][0]*24
+                thresh = 158
+            if model_type == 'max':
+                predicted = y_pred_orig[0][0]
+                actual = y_actual_orig[0][0]
+                thresh = 12
+
+            error = mean_squared_error([actual], [predicted], squared=False)
+            daily_errors.append(error)
+
+            # calculate false positive and false negative above and below threshold
+            if actual > thresh:
+                total_pos += 1
+                if predicted < thresh:
+                    # plot = True
+                    false_neg += 1
+            else:
+                total_neg += 1
+                if predicted > thresh:
+                    # plot = True
+                    false_pos += 1
+
+            if False:
+                plt.figure()
+                print(error)
+                plt.plot(y_pred_orig, label='forecast')
+                plt.plot(y_actual_orig, label='actual')
+                plt.legend()
+                plt.show()
+
+
+    print("\n")
+    print("\n")
+    print("\nRMSE ERROR TEST DATA")
+    print(np.mean(daily_errors))
+    print("\nFALSE POS TEST DATA")
+    print(false_pos/total_neg)
+    print("\nFALSE NEG TEST DATA")
+    print(false_neg/total_pos)
+    print("\n")
+    print("\n")
+
+    return np.mean(daily_errors), false_pos/total_neg, false_neg/total_pos
+
 def random_hyper_search():
     lag_options = [48, 84, 120, 156, 192]
     encoder_units_options = [16, 32, 64, 128, 256]
@@ -903,9 +1015,9 @@ cow_list = sorted(cow_list)
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
 #
 # train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, num_cows=10, weights_flag=7, predict_lag=6, model_name='original')
-# train_from_saved_data('normalised complete', lag=120, batch_size=16, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='ave')
-# train_from_saved_data('normalised complete', lag=120, batch_size=16, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='max')
-# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=50, encoder_units=16, decoder_units=32, dense_neurons=24, weights_flag=7, horizon=24, predict_lag=6, learning_rate=0.1, clipnorm=0.001, num_cows=5, model_name='forecast')
+# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='ave')
+# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='max')
+# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=50, encoder_units=16, decoder_units=32, dense_neurons=24, weights_flag=5, horizon=24, predict_lag=6, learning_rate=0.1, combine_bins = True, clipnorm=0.001, num_cows=197, model_name='forecast')
 
 # train_from_saved_data('normalised complete', lag=120, batch_size=128, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, weights_flag=7, horizon = 24, predict_lag=6, model_name='original')
 # train_from_saved_data('normalised complete', lag=120, batch_size=128, epochs=20, encoder_units=32, decoder_units=32, dense_neurons=16, weights_flag=7, horizon = 24, predict_lag=6, model_name='forecast')
@@ -930,36 +1042,36 @@ cow_list = sorted(cow_list)
 # random_hyper_search()
 
 # random_hyper_optimisation()
-
-best_RMSE = 1000
-# orig learning rates
-# batch_dict = {512: 0.0005, 256: 0.0005, 128: 0.0002, 64: 0.0001, 32: 0.00005}
-# lower learning rates
-batch_dict = {128: 0.0001, 64: 0.00005, 32: 0.00002}
-for batch_size, lr in batch_dict.items():
-    while(True):
-        try:
-            mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
-                                                                                                      lag=120,
-                                                                                                      batch_size=batch_size,
-                                                                                                      epochs=300,
-                                                                                                      encoder_units=32,
-                                                                                                      decoder_units=64,
-                                                                                                      dense_neurons=48,
-                                                                                                      weights_flag=7,
-                                                                                                      horizon=24,
-                                                                                                      learning_rate=lr,
-                                                                                                      clipnorm=0.001,
-                                                                                                      predict_lag=6,
-                                                                                                      model_name='forecast')
-
-            if mean_RMSE<best_RMSE:
-                best_RMSE = mean_RMSE
-                model.save('models/optimal_model')
-
-            break
-
-        except:
-            print("Error")
-            lr = lr/2
+#
+# best_RMSE = 1000
+# # orig learning rates
+# # batch_dict = {512: 0.0005, 256: 0.0005, 128: 0.0002, 64: 0.0001, 32: 0.00005}
+# # lower learning rates
+# batch_dict = {128: 0.0001, 64: 0.00005, 32: 0.00002}
+# for batch_size, lr in batch_dict.items():
+#     while(True):
+#         try:
+#             mean_RMSE, false_pos, false_neg, epochs, daily_RMSE, mean_pred, model = train_from_saved_data('normalised complete',
+#                                                                                                       lag=120,
+#                                                                                                       batch_size=batch_size,
+#                                                                                                       epochs=300,
+#                                                                                                       encoder_units=32,
+#                                                                                                       decoder_units=64,
+#                                                                                                       dense_neurons=48,
+#                                                                                                       weights_flag=7,
+#                                                                                                       horizon=24,
+#                                                                                                       learning_rate=lr,
+#                                                                                                       clipnorm=0.001,
+#                                                                                                       predict_lag=6,
+#                                                                                                       model_name='forecast')
+#
+#             if mean_RMSE<best_RMSE:
+#                 best_RMSE = mean_RMSE
+#                 model.save('models/optimal_model')
+#
+#             break
+#
+#         except:
+#             print("Error")
+#             lr = lr/2
 
