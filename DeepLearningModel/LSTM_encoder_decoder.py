@@ -243,15 +243,15 @@ def ignore(ignore_lag, l):
         l[i] = l[i][0:-ignore_lag]
     return np.array(l)
 
-def build_forecast_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[]):
+def build_forecast_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[], test_name='forecast'):
     # define hyper-parameters to be optimised
     verbose = 1
     loss = 'mse'
     optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm)
     activation = 'relu'
     # callback = EarlyStopping(monitor='val_loss', patience=10)
-    filepath = "model checkpoints/batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
-    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    filepath = "tests/current test/" + test_name + "-batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=25)
     callback_nan = TerminateOnNaN()
 
     n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
@@ -299,14 +299,14 @@ def build_daily_max_model(train_x, train_y, test_x, test_y, batch_size, epochs, 
     optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm)
     activation = 'relu'
     # callback = EarlyStopping(monitor='val_loss', patience=10)
-    filepath = "model checkpoints/batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
-    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    filepath = "tests/max test/batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=25)
     callback_nan = TerminateOnNaN()
 
-    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
+    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], 1
     # reshape output into [samples, timesteps, features]
-    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
-    test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
+    # train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
+    # test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
 
     # define model
     encoder_input = Input(shape=(n_timesteps, n_features))
@@ -327,8 +327,9 @@ def build_daily_max_model(train_x, train_y, test_x, test_y, batch_size, epochs, 
     dense_input = Dropout(0.2)(decoder_output)
     dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
     dense_output = dense_layer(dense_input)
-    outputs = TimeDistributed(Dense(1))(dense_output)
-    outputs = MaxPooling1D(pool_size=24)(outputs)
+    outputs = TimeDistributed(Dense(1, activation=activation))(dense_output)
+    outputs = Flatten()(outputs)
+    outputs = Dense(1)(outputs)
     # model.add(TimeDistributed(Dense(dense_neurons, activation=activation)))
     # model.add(TimeDistributed(Dense(1)))
 
@@ -446,20 +447,20 @@ def calculate_sample_weights_new(y_test, bins, scalar_y, combine_flag):
     for y_sample in y_test:
         # y_sample = scalar_y.inverse_transform(y_sample)
         y_sample = y_sample.flatten()
-        daily_frequency.append(max(y_sample))
+        daily_frequency.append(sum(y_sample))
     hist = np.histogram(daily_frequency, bins)
 
     print(hist)
 
     # delete final half of bins
     if combine_flag:
-        new_bins = np.delete(hist[1], [x for x in range(ceil(bins / 1.5), bins)])
-        last_sum = sum(hist[0][floor(bins / 2) - 1:])
-        new_freq = np.delete(hist[0], [x for x in range(ceil(bins / 1.5) - 1, bins)])
+        new_bins = np.delete(hist[1], [x for x in range(ceil(bins / 2), bins)])
+        last_sum = sum(hist[0][ceil(bins / 2) - 1:])
+        new_freq = np.delete(hist[0], [x for x in range(ceil(bins / 2) - 1, bins)])
         new_freq = np.append(new_freq, last_sum)
         hist = (new_freq, new_bins)
         print(hist)
-        bins = ceil(bins / 1.5)
+        bins = ceil(bins / 2)
 
     sample_weights = []
     for daily_freq in daily_frequency:
@@ -503,7 +504,7 @@ def add_forecast_input(train_x, train_y, test_x, test_y, num_cows):
 def add_max_y(y):
     y_new = []
     for y_sample in y:
-        y_new.append([max(y_sample)])
+        y_new.append(max(y_sample))
     return np.array(y_new)
 
 def add_ave_y(y):
@@ -512,7 +513,31 @@ def add_ave_y(y):
         y_new.append([np.mean(y_sample)])
     return np.array(y_new)
 
-def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, num_cows = 197, weights_flag=0, predict_lag = 0, horizon=24, learning_rate = 0.001, clipnorm=0.01, combine_bins = False, model_name = 'forecast'):
+def convert_to_univariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
+
+def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, num_cows = 197, weights_flag=0, predict_lag = 0, horizon=24, learning_rate = 0.001, clipnorm=0.01, combine_bins = False, model_name = 'forecast', test_name = 'forecast'):
     # read in data
     x_train, y_train, x_test, y_test, scalar_y = read_pickle(file_name)
     invert_test = []
@@ -558,8 +583,11 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     # scalar_y.scale_ = 0.01455627
     # scalar_y.data_range_ = 68.69892261
 
-    if model_name in ['forecast', 'max', 'ave']:
+    if model_name in ['forecast', 'max', 'ave', 'univariate']:
         x_train, y_train, x_test, y_test = add_forecast_input(x_train, y_train, x_test, y_test, num_cows)
+
+    if model_name in ['univariate']:
+        x_train, x_test = convert_to_univariate(x_train, x_test)
 
     sample_weights = []
     if weights_flag:
@@ -574,10 +602,8 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         y_train = add_ave_y(y_train)
         y_test = add_ave_y(y_test)
 
-    print(y_train)
-
-    if model_name == 'forecast':
-        model, history = build_forecast_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights)
+    if model_name in ['forecast', 'univariate']:
+        model, history = build_forecast_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights, test_name=test_name)
     elif model_name == 'original':
         model, history = build_original_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, sample_weights)
     elif model_name == 'max':
@@ -585,7 +611,8 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     elif model_name == 'ave':
         model, history = build_daily_ave_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights)
 
-    if model_name in ["forecast", "original"]:
+
+    if model_name in ["forecast", "original", "univariate"]:
         # model.save('models/' + file_name)
         mean_RMSE, false_pos, false_neg, daily_RMSE, mean_pred = test_error(model, x_test, y_test, scalar_y, num_cows, invert_test, model_type=model_name)
 
@@ -660,7 +687,7 @@ def test_error(model, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_p
     y_pred = model.predict(test_x)
 
     # only care about original test value for assessing error.
-    if model_type=='forecast':
+    if model_type in ['forecast', 'univariate']:
         test_x = test_x[0]
 
     samples_per_cow = int(test_x.shape[0]/num_cows)
@@ -815,7 +842,7 @@ def test_max_ave_error(model, test_x, test_y, norm_y, num_cows=197, model_type='
         for cow_n in range(0,num_cows):
             # extract prediction
             i = sample_n + cow_n*samples_per_cow
-            y_pred_orig = norm_y.inverse_transform(y_pred[i])
+            y_pred_orig = norm_y.inverse_transform(y_pred[i].reshape(-1,1))
             test_y_i = test_y[i].reshape(-1,1)
             y_actual_orig = norm_y.inverse_transform(test_y_i)
 
@@ -1013,11 +1040,13 @@ cow_list = list(set(panting_model_df["Cow"]))
 cow_list = sorted(cow_list)
 
 #################### TRAIN FROM NORMALISED SAVED DATA #########################
-#
-# train_from_saved_data('normalised complete', lag=120, batch_size=409, epochs=10, encoder_units=64, decoder_units=64, dense_neurons=128, num_cows=10, weights_flag=7, predict_lag=6, model_name='original')
+train_from_saved_data('normalised complete', lag=120, batch_size=256, epochs=125, encoder_units=32, decoder_units=64, dense_neurons=48, learning_rate=0.0005, clipnorm=0.001, weights_flag=7, combine_bins = False, predict_lag=6, model_name='univariate', test_name='univariate')
+train_from_saved_data('normalised complete', lag=120, batch_size=256, epochs=125, encoder_units=32, decoder_units=64, dense_neurons=48, learning_rate=0.0005, clipnorm=0.5, weights_flag=7, combine_bins = False, predict_lag=6, model_name='forecast', test_name='clipnorm')
+train_from_saved_data('normalised complete', lag=120, batch_size=256, epochs=125, encoder_units=32, decoder_units=64, dense_neurons=48, learning_rate=0.0005, clipnorm=0.001, weights_flag=7, combine_bins = False, predict_lag=6, model_name='forecast', test_name='control')
+# train_from_saved_data('normalised complete', lag=120, batch_size=256, epochs=125, encoder_units=32, decoder_units=64, dense_neurons=48, learning_rate=0.0005, clipnorm=0.001, weights_flag=7, combine_bins = False, predict_lag=6, model_name='max')
 # train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='ave')
 # train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=5, encoder_units=32, decoder_units=32, dense_neurons=16, num_cows=3, weights_flag=7, predict_lag=6, model_name='max')
-# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=50, encoder_units=16, decoder_units=32, dense_neurons=24, weights_flag=5, horizon=24, predict_lag=6, learning_rate=0.1, combine_bins = True, clipnorm=0.001, num_cows=197, model_name='forecast')
+# train_from_saved_data('normalised complete', lag=120, batch_size=32, epochs=50, encoder_units=16, decoder_units=32, dense_neurons=24, weights_flag=7, horizon=24, predict_lag=6, learning_rate=0.1, combine_bins = True, clipnorm=0.001, num_cows=197, model_name='forecast')
 
 # train_from_saved_data('normalised complete', lag=120, batch_size=128, epochs=20, encoder_units=87, decoder_units=32, dense_neurons=64, weights_flag=7, horizon = 24, predict_lag=6, model_name='original')
 # train_from_saved_data('normalised complete', lag=120, batch_size=128, epochs=20, encoder_units=32, decoder_units=32, dense_neurons=16, weights_flag=7, horizon = 24, predict_lag=6, model_name='forecast')

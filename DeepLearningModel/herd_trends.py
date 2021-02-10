@@ -113,7 +113,7 @@ def edit_train_test(x_train, y_train, x_test, y_test, horizon, lag, num_cows=197
 
     return x_train, y_train, x_test, y_test
 
-def test_error(y_pred, test_x, test_y, norm_y, num_cows=197, invert_test = [],y_prev=0, model_type='forecast', plot=False):
+def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, model_type='forecast', plot=False):
 
     # only care about original test value for assessing error.
     if model_type=='forecast':
@@ -505,21 +505,21 @@ def compare_model_errors():
 
 def plot_model_error(error_df):
     for error_type in ['mean hourly RMSE', 'daily freq RMSE', 'daily freq fp', 'daily freq fn', 'max RMSE', 'max fp','max fn', 'mean herd RMSE']:
-        plt.figure()
-        # plot for different epochs
-        for batch_size in [128,256,512]:
-            batch_error = error_df[error_df['batch size']==batch_size]
-            x = batch_error['epochs'].values
-            y = batch_error[error_type].values
-            plt.title(error_type)
-            plt.xlabel('epochs')
-            plt.ylabel('error')
-            plt.plot(x,y,label = 'batch size: ' + str(batch_size))
-        plt.legend()
+        # plt.figure()
+        # # plot for different epochs
+        # for batch_size in [32, 64, 128,256,512]:
+        #     batch_error = error_df[error_df['batch size']==batch_size]
+        #     x = batch_error['epochs'].values
+        #     y = batch_error[error_type].values
+        #     plt.title(error_type)
+        #     plt.xlabel('epochs')
+        #     plt.ylabel('error')
+        #     plt.plot(x,y,label = 'batch size: ' + str(batch_size))
+        # plt.legend()
 
         # plot for different epochs
         plt.figure()
-        for epoch in [50, 100, 150, 200, 250, 300]:
+        for epoch in [100]:
             epoch_error = error_df[error_df['epochs']==epoch]
             x = epoch_error['batch size'].values
             y = epoch_error[error_type].values
@@ -531,6 +531,109 @@ def plot_model_error(error_df):
 
 
     plt.show()
+
+def test_max_ave_error(model, test_x, test_y, norm_y, num_cows=197, model_type='max'):
+    y_pred = model.predict(test_x)
+
+    test_x = test_x[0]
+
+    samples_per_cow = int(test_x.shape[0]/num_cows)
+
+    # error calc
+    false_pos = 0
+    false_neg = 0
+    total_pos = 0
+    total_neg = 0
+    daily_errors = []
+
+
+    # iter for doing only early morning analysis:
+    iter = []
+    for j in range(0, 119592, samples_per_cow):
+        for i in range(5, 604, 24):
+            # iter.append(i - 2 + j)
+            # iter.append(i - 1 + j)
+            iter.append(i + j)
+            # iter.append(i + 1 + j)
+            # iter.append(i + 2 + j)
+
+    # for i in iter:
+    for sample_n in range(0, samples_per_cow):
+        for cow_n in range(0,num_cows):
+            # extract prediction
+            i = sample_n + cow_n*samples_per_cow
+            y_pred_orig = norm_y.inverse_transform(y_pred[i].reshape(-1,1))
+            test_y_i = test_y[i].reshape(-1,1)
+            y_actual_orig = norm_y.inverse_transform(test_y_i)
+
+            # plt.figure()
+            # plt.plot(y_pred_orig, label='forecast')
+            # plt.plot(y_actual_orig, label='actual')
+            # plt.legend()
+
+            # adjust prediction so that it only uses the first 18 samples, and uses the actually recorder previous 6
+            # to make 24 hours.
+            # if y_prev:
+            #     # extract actual previous x values
+            #     y_prev_actual = test_y[i-y_prev].reshape(-1,1)
+            #     y_prev_actual = norm_y.inverse_transform(y_prev_actual)
+            #     y_prev_actual = y_prev_actual[0:6]
+            #
+            #     # extract available previous x values
+            #     x_test_i = test_x[i]
+            #     y_prev_known = []
+            #     for j in range(-y_prev, 0):
+            #         y_prev_known.append([x_test_i[j][0]])
+            #     y_prev_known = norm_y.inverse_transform(y_prev_known)
+            #
+            #     y_actual_orig = np.concatenate((y_prev_actual, y_actual_orig[0:-y_prev]))
+            #     y_pred_orig = np.concatenate((y_prev_known, y_pred_orig[0:-y_prev]))
+
+            if model_type == 'ave':
+                predicted = y_pred_orig[0][0]*24
+                actual = y_actual_orig[0][0]*24
+                thresh = 158
+            if model_type == 'max':
+                predicted = y_pred_orig[0][0]
+                actual = y_actual_orig[0][0]
+                thresh = 12
+
+            error = mean_squared_error([actual], [predicted], squared=False)
+            daily_errors.append(error)
+
+            # calculate false positive and false negative above and below threshold
+            if actual > thresh:
+                total_pos += 1
+                if predicted < thresh:
+                    # plot = True
+                    false_neg += 1
+            else:
+                total_neg += 1
+                if predicted > thresh:
+                    # plot = True
+                    false_pos += 1
+
+            if False:
+                plt.figure()
+                print(error)
+                plt.plot(y_pred_orig, label='forecast')
+                plt.plot(y_actual_orig, label='actual')
+                plt.legend()
+                plt.show()
+
+
+    print("\n")
+    print("\n")
+    print("\nRMSE ERROR TEST DATA")
+    print(np.mean(daily_errors))
+    print("\nFALSE POS TEST DATA")
+    print(false_pos/total_neg)
+    print("\nFALSE NEG TEST DATA")
+    print(false_neg/total_pos)
+    print("\n")
+    print("\n")
+
+    return np.mean(daily_errors), false_pos/total_neg, false_neg/total_pos
 
 def summarise_herd_trends(model_name):
     # extract model data
@@ -548,22 +651,30 @@ def summarise_herd_trends(model_name):
 
 # compare_model_errors()
 
-error_df = pd.read_pickle('model checkpoints orig/error_summary.pkl')
-error_df = error_df[(error_df['batch size']!=128) | (error_df['epochs']!=200)]
-error_df = error_df.sort_values(by=['batch size', 'epochs'])
-with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-    print(error_df)
-# error_df = pd.concat([error_df, pd.read_pickle('model checkpoints/error_summary_2.pkl')])
-# error_df.to_pickle('model checkpoints/error_summary.pkl')
-plot_model_error(error_df)
+# error_df = pd.read_pickle('error_summary.pkl')
+# # error_df = error_df[(error_df['batch size']!=128)]
+# error_df = error_df[(error_df['batch size']!=128) | (error_df['epochs']!=200)]
+# error_df = error_df[(error_df['batch size']!=64) | (error_df['epochs']!=150)]
+# error_df = error_df.sort_values(by=['batch size', 'epochs'])
+# with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+#     print(error_df)
+# # error_df = pd.concat([error_df, pd.read_pickle('model checkpoints orig/error_summary.pkl')])
+# # error_df.to_pickle('error_summary.pkl')
+# plot_model_error(error_df)
 
 
 # extract model data
-# model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', 'model checkpoints orig/batch_size128-200.hdf5')
-#
-# # predict
-# print("Making Predictions")
-# y_pred = model.predict(x_test)
-#
-# test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+model, x_train, y_train, x_test, y_test, scalar_y = import_model('normalised lag 120', 'tests/max test/batch_size256-50.hdf5')
+
+# predict
+print("Making Predictions")
+y_pred = model.predict(x_test)
+
+# test_error(y_pred, x_test, y_test, scalar_y, y_prev=0, plot=True)
+
+test_max_ave_error(model, x_test, y_test, scalar_y, num_cows=197, model_type='max')
+
+# mean_herd_error = herd_trends(y_pred, x_test, y_test, scalar_y, False)
+
+
 

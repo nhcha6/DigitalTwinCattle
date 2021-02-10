@@ -12,7 +12,6 @@ cow_category = "All"
 # store cow info in dataframe
 cow_details_df = pd.read_csv(data_dir + animal_info_name)
 
-
 # sort cow IDs into categories using dictionaries
 breed_dict = create_category_dict("Breed", "Tag#", cow_details_df)
 coat_dict = create_category_dict("Coat colour", "Tag#", cow_details_df)
@@ -41,14 +40,14 @@ docility_dict = create_category_dict("Docility score", "Tag#", cow_details_df)
 # can also select the specific dates we wish to plot via single_day()
 total_date_list = pd.date_range(datetime(2018, 10, 19), periods=75).tolist()
 # dates of heat taken from paper
-date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[16:20]]
+date_set = [date.strftime("%d-%b-%Y") for date in total_date_list]
 #date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:36]]
 #date_set = [date.strftime("%d-%b-%Y") for date in total_date_list[32:42]]
 # plot consecutive days over extended period of time
 plot_consecutive = True
 
 # select state indeces
-state_indeces = [4]
+state_indeces = [5]
 
 ##################################################################
 
