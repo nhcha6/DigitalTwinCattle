@@ -152,6 +152,3 @@ model = train_from_saved_data(file_name='Deep Learning Data/Univariate Lag 120',
                                                                                                       learning_rate=0.0005,
                                                                                                       test_name='no_weight')
 model.save('LSTM Models/No Weight Tests/no_weights_model.hdf5')
-
-
-# nic comment
