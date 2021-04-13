@@ -116,10 +116,13 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
 
     # reduce size for tests
     if num_cows != 197:
-        x_train = [x_train[0][0:num_cows * 899], x_train[1][0:num_cows * 899]]
-        y_train = y_train[0:num_cows * 899]
+        x_train = [x_train[0][0:num_cows * 875], x_train[1][0:num_cows * 875]]
+        y_train = y_train[0:num_cows * 875]
         x_test = [x_test[0][0:num_cows * 604], x_test[1][0:num_cows * 604]]
         y_test = y_test[0:num_cows * 604]
+
+    # change train/test size for cross validation
+    x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, 580, num_cows=197)
 
     sample_weights = []
     if weights_flag:
@@ -127,6 +130,23 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
 
     model = build_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
     return model
+
+def change_test_train_ratio(x_train, y_train, x_test, y_test, train_size, num_cows=197):
+    train_i = []
+    test_i = []
+    for cow_n in range(0, num_cows):
+        for day_n in range(0, 875):
+            if day_n < train_size:
+                train_i.append(cow_n * 875 + day_n)
+            else:
+                test_i.append(cow_n * 875 + day_n)
+
+    x_test = [np.concatenate((x_test[0], x_train[0][test_i])), np.concatenate((x_test[1], x_train[1][test_i]))]
+    y_test = np.concatenate((y_test, y_train[test_i]))
+    x_train = [x_train[0][train_i], x_train[1][train_i]]
+    y_train = y_train[train_i]
+
+    return x_train, y_train, x_test, y_test
 
 def grid_search(batch_dict, saved_data, test_name):
     # loop through and test each model
@@ -137,18 +157,19 @@ def grid_search(batch_dict, saved_data, test_name):
                                                                                                       weights_flag=7,
                                                                                                       learning_rate=lr,
                                                                                                       test_name=test_name)
+
 # Define batch size and learning rate for univariate test
-batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
-grid_search(batch_dict, 'Deep Learning Data/Univariate Lag 120', 'univariate')
+# batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
+# grid_search(batch_dict, 'Deep Learning Data/Univariate Lag 120', 'univariate')
 
 # Define batch size and learning rate for multivariate test
 batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0002, 64: 0.00005}
-grid_search(batch_dict, 'Deep Learning Data/Mulitvariate Lag 120', 'multivariate')
+grid_search(batch_dict, 'Deep Learning Data/Multivariate Lag 120', 'multivariate')
 
 # run no sample weight test
-model = train_from_saved_data(file_name='Deep Learning Data/Univariate Lag 120', lag=120, batch_size=64, epochs=10, encoder_units=32, decoder_units=64,
-                                                                                                      dense_neurons=48,
-                                                                                                      weights_flag=0,
-                                                                                                      learning_rate=0.0005,
-                                                                                                      test_name='no_weight')
-model.save('LSTM Models/No Weight Tests/no_weights_model.hdf5')
+# model = train_from_saved_data(file_name='Deep Learning Data/Univariate Lag 120', lag=120, batch_size=64, epochs=10, encoder_units=32, decoder_units=64,
+#                                                                                                       dense_neurons=48,
+#                                                                                                       weights_flag=0,
+#                                                                                                       learning_rate=0.0005,
+#                                                                                                       test_name='no_weight')
+# model.save('LSTM Models/No Weight Tests/no_weights_model.hdf5')
