@@ -495,21 +495,24 @@ def compare_model_individual_errors(model_location, data_location):
     error_summary = []
     for batch_size in [64,128, 256, 512]:
         for epochs in [50, 100, 150, 200, 250, 300]:
-            print('\nBatch Size: ' + str(batch_size))
-            print('Epochs: ' + str(epochs))
-            model_name = model_location + '/batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
+            try:
+                print('\nBatch Size: ' + str(batch_size))
+                print('Epochs: ' + str(epochs))
+                model_name = model_location + '/multivariate-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
 
-            # extract model data
-            model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
+                # extract model data
+                model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
 
-            # predict
-            print("Making Predictions")
-            y_pred = model.predict(x_test)
+                # predict
+                print("Making Predictions")
+                y_pred = model.predict(x_test)
 
-            print("Calculating Error")
-            mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+                print("Calculating Error")
+                mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False)
 
-            error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
+                error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
+            except OSError:
+                continue
 
     error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
     print(error_summary_df)
@@ -521,21 +524,24 @@ def compare_model_herd_errors(model_location, data_location):
     for batch_size in [64,128, 256, 512]:
         for epochs in [50, 100, 150, 200, 250, 300]:
 
-            print('\nBatch Size: ' + str(batch_size))
-            print('Epochs: ' + str(epochs))
-            model_name = model_location + '/batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
+            try:
+                print('\nBatch Size: ' + str(batch_size))
+                print('Epochs: ' + str(epochs))
+                model_name = model_location + '/multivariate-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
 
-            # extract model data
-            model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
+                # extract model data
+                model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
 
-            # predict
-            print("Making Predictions")
-            y_pred = model.predict(x_test)
+                # predict
+                print("Making Predictions")
+                y_pred = model.predict(x_test)
 
-            print("Calculating Error")
-            mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total,  = test_error_herd(y_pred, x_test, y_test, scalar_y, plot=False)
+                print("Calculating Error")
+                mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total,  = test_error_herd(y_pred, x_test, y_test, scalar_y, plot=False)
 
-            error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
+                error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
+            except OSError:
+                continue
 
     error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
     print(error_summary_df)
@@ -585,10 +591,10 @@ def plot_subherd_trends(model_location, data_location):
 ################## CREATE ERROR DF FOR MULTIVARIATE TEST ######################
 
 # creates a dictionary of all individual errors of multiple models and saves it to file
-# compare_model_individual_errors('LSTM Models/Multivariate Optimisation', 'Deep Learning Data/Multivariate Lag 120')
+# compare_model_individual_errors('LSTM Models/Multivariate Optimisation 2', 'Deep Learning Data/Multivariate Lag 120')
 
 # creates a dictionary of all herd errors of multiple models and saves it to file
-# compare_model_herd_errors('LSTM Models/Multivariate Optimisation', 'Deep Learning Data/Multivariate Lag 120')
+# compare_model_herd_errors('LSTM Models/Multivariate Optimisation 2', 'Deep Learning Data/Multivariate Lag 120')
 
 ################## CREATE ERROR DF FOR UNIVARIATE TEST ######################
 
@@ -601,21 +607,26 @@ def plot_subherd_trends(model_location, data_location):
 ################## PLOT ERROR FOR MULTIVARIATE TEST ######################
 
 # read in error summary
-ind_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation/individual_error_summary.pkl')
-herd_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation/herd_error_summary.pkl')
-# remove unstable error metrics (found by inspection)
-ind_error_df = ind_error_df[(ind_error_df['batch size']!=128) | (ind_error_df['epochs']!=200)]
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=128) | (herd_error_df['epochs']!=200)]
-ind_error_df = ind_error_df[(ind_error_df['batch size']!=64) | (ind_error_df['epochs']!=150)]
+# ind_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation 2/individual_error_summary.pkl')
+herd_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation 2/herd_error_summary.pkl')
+# # remove unstable error metrics (found by inspection)
 herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=150)]
-# ensure df is sorted so plots look nice
-ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
-herd_error_df = herd_error_df.sort_values(by=['batch size', 'epochs'])
+herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=250)]
+herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=300)]
+herd_error_df = herd_error_df[(herd_error_df['batch size']!=128) | (herd_error_df['epochs']!=200)]
+herd_error_df = herd_error_df[(herd_error_df['batch size']!=200)]
+
+# herd_error_df = herd_error_df[(herd_error_df['batch size']!=128) | (herd_error_df['epochs']!=200)]
+# ind_error_df = ind_error_df[(ind_error_df['batch size']!=64) | (ind_error_df['epochs']!=150)]
+# herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=150)]
+# # ensure df is sorted so plots look nice
+# ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+# herd_error_df = herd_error_df.sort_values(by=['batch size', 'epochs'])
 # plot errors
 # plot_model_error(ind_error_df, [50, 100, 150, 200, 250, 300], ['mean hourly RMSE'], "Multivariate - Inidividual")
 # plot_model_error(herd_error_df, [50, 100, 150, 200, 250, 300], ['mean hourly RMSE'], "Multivariate - Herd")
-# plot_model_error(ind_error_df, [100], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Inidividual")
-# plot_model_error(herd_error_df, [100], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Herd")
+# plot_model_error(ind_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Inidividual")
+plot_model_error(herd_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Herd")
 
 ####################### PLOT ERROR FOR UNIIVARIATE TEST ######################
 
