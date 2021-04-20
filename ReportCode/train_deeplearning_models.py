@@ -122,7 +122,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         y_test = y_test[0:num_cows * 604]
 
     # change train/test size for cross validation
-    x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, num_cows=197)
+    # x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, num_cows=197)
 
     sample_weights = []
     if weights_flag:
@@ -152,20 +152,33 @@ def change_test_train_ratio(x_train, y_train, x_test, y_test, train_size = 500, 
 def grid_search(batch_dict, saved_data, test_name):
     # loop through and test each model
     for batch_size, lr in batch_dict.items():
-            train_from_saved_data(file_name=saved_data, lag=120, batch_size=batch_size, epochs=300, encoder_units=32,
+        train_from_saved_data(file_name=saved_data, lag=120, batch_size=batch_size, epochs=300, encoder_units=32,
                                                                                                       decoder_units=64,
                                                                                                       dense_neurons=48,
                                                                                                       weights_flag=7,
                                                                                                       learning_rate=lr,
                                                                                                       test_name=test_name)
 
+def k_fold_test(batch_dict, saved_data):
+    # loop through and test each model
+    for n in range(1,6):
+        n_fold = str(n) + '_fold'
+        for batch_size, lr in batch_dict.items():
+            n_fold_file = saved_data + '/' + n_fold
+            train_from_saved_data(file_name=n_fold_file, lag=200, batch_size=batch_size, epochs=150, encoder_units=32,
+                                                                                                          decoder_units=64,
+                                                                                                          dense_neurons=48,
+                                                                                                          weights_flag=7,
+                                                                                                          learning_rate=lr,
+                                                                                                          test_name=n_fold)
+
 # Define batch size and learning rate for univariate test
 # batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
 # grid_search(batch_dict, 'Deep Learning Data/Univariate Lag 120', 'univariate')
 
 # Define batch size and learning rate for multivariate test
-batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0002, 64: 0.00005}
-grid_search(batch_dict, 'Deep Learning Data/Multivariate Lag 120', '')
+# batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0002, 64: 0.00005}
+# grid_search(batch_dict, 'Deep Learning Data/Multivariate Lag 120', '')
 
 # run no sample weight test
 # model = train_from_saved_data(file_name='Deep Learning Data/Univariate Lag 120', lag=120, batch_size=64, epochs=10, encoder_units=32, decoder_units=64,
@@ -174,3 +187,7 @@ grid_search(batch_dict, 'Deep Learning Data/Multivariate Lag 120', '')
 #                                                                                                       learning_rate=0.0005,
 #                                                                                                       test_name='no_weight')
 # model.save('LSTM Models/No Weight Tests/no_weights_model.hdf5')
+
+# run k fold cross validation test
+batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
+k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')
