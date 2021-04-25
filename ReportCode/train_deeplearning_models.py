@@ -15,6 +15,7 @@ from keras import Model
 from keras.layers import Concatenate
 from keras.optimizers import adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
+from create_test_train_data import *
 from keras import models
 import pickle
 import random
@@ -25,7 +26,7 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     # define hyper-parameters
     verbose = 1
     loss = 'mse'
-    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm)
+    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm, decay=learning_rate/200)
     activation = 'relu'
 
     # callback = EarlyStopping(monitor='val_loss', patience=10)
@@ -121,6 +122,10 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         x_test = [x_test[0][0:num_cows * 604], x_test[1][0:num_cows * 604]]
         y_test = y_test[0:num_cows * 604]
 
+    # reduce number of lags
+    if lag!=200:
+        x_train, x_test = edit_num_lags(x_train, x_test, lag)
+
     # change train/test size for cross validation
     # x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, num_cows=197)
 
@@ -165,7 +170,7 @@ def k_fold_test(batch_dict, saved_data):
         n_fold = str(n) + '_fold'
         for batch_size, lr in batch_dict.items():
             n_fold_file = saved_data + '/' + n_fold
-            train_from_saved_data(file_name=n_fold_file, lag=200, batch_size=batch_size, epochs=150, encoder_units=32,
+            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=150, encoder_units=32,
                                                                                                           decoder_units=64,
                                                                                                           dense_neurons=48,
                                                                                                           weights_flag=7,
@@ -189,5 +194,6 @@ def k_fold_test(batch_dict, saved_data):
 # model.save('LSTM Models/No Weight Tests/no_weights_model.hdf5')
 
 # run k fold cross validation test
-batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
+# batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
+batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
 k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')

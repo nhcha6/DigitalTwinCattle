@@ -55,6 +55,7 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     daily_errors = []
     max_errors = []
     thresh_count_errors = []
+    inf_count = 0
 
     # for i in iter:
     for sample_n in range(y_prev, samples_per_cow):
@@ -67,6 +68,17 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
 
             # calculate hourly RMSE
             error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
+
+            if error > 40:
+                inf_count += 1
+                print(inf_count)
+                continue
+
+            plt.figure()
+            plt.plot(y_actual_orig, 'actual')
+            plt.plot(y_pred_orig, 'pred')
+            plt.legend()
+            plt.show()
 
             # calculate daily frequency and max
             freq_actual = sum(y_actual_orig)
@@ -491,14 +503,14 @@ def herd_trends(y_pred, x_test, y_test, scalar_y, plot=False):
 
     return mean_herd_error
 
-def compare_model_individual_errors(model_location, data_location):
+def compare_model_individual_errors(model_location, data_location, name=''):
     error_summary = []
-    for batch_size in [64,128, 256, 512]:
-        for epochs in [50, 100, 150, 200, 250, 300]:
+    for batch_size in [128]:
+        for epochs in [50, 100, 150]:
             try:
                 print('\nBatch Size: ' + str(batch_size))
                 print('Epochs: ' + str(epochs))
-                model_name = model_location + '/multivariate-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
+                model_name = model_location + '/' + name + '-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
 
                 # extract model data
                 model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
@@ -518,7 +530,7 @@ def compare_model_individual_errors(model_location, data_location):
     print(error_summary_df)
     error_summary_df.to_pickle(model_location + '/individual_error_summary.pkl')
 
-def compare_model_herd_errors(model_location, data_location):
+def compare_model_herd_errors(model_location, data_location, name = ''):
     error_summary = []
 
     for batch_size in [64,128, 256, 512]:
@@ -527,7 +539,7 @@ def compare_model_herd_errors(model_location, data_location):
             try:
                 print('\nBatch Size: ' + str(batch_size))
                 print('Epochs: ' + str(epochs))
-                model_name = model_location + '/multivariate-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
+                model_name = model_location + '/' + name + '-batch_size' + str(batch_size) + '-' + str(epochs) + '.hdf5'
 
                 # extract model data
                 model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
@@ -608,14 +620,8 @@ def plot_subherd_trends(model_location, data_location):
 
 # read in error summary
 # ind_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation 2/individual_error_summary.pkl')
-herd_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation 2/herd_error_summary.pkl')
+# herd_error_df = pd.read_pickle('LSTM Models/Multivariate Optimisation 2/herd_error_summary.pkl')
 # # remove unstable error metrics (found by inspection)
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=150)]
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=250)]
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=300)]
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=128) | (herd_error_df['epochs']!=200)]
-herd_error_df = herd_error_df[(herd_error_df['batch size']!=200)]
-
 # herd_error_df = herd_error_df[(herd_error_df['batch size']!=128) | (herd_error_df['epochs']!=200)]
 # ind_error_df = ind_error_df[(ind_error_df['batch size']!=64) | (ind_error_df['epochs']!=150)]
 # herd_error_df = herd_error_df[(herd_error_df['batch size']!=64) | (herd_error_df['epochs']!=150)]
@@ -626,7 +632,7 @@ herd_error_df = herd_error_df[(herd_error_df['batch size']!=200)]
 # plot_model_error(ind_error_df, [50, 100, 150, 200, 250, 300], ['mean hourly RMSE'], "Multivariate - Inidividual")
 # plot_model_error(herd_error_df, [50, 100, 150, 200, 250, 300], ['mean hourly RMSE'], "Multivariate - Herd")
 # plot_model_error(ind_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Inidividual")
-plot_model_error(herd_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Herd")
+# plot_model_error(herd_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'], "Multivariate - Herd")
 
 ####################### PLOT ERROR FOR UNIIVARIATE TEST ######################
 
@@ -650,3 +656,7 @@ plot_model_error(herd_error_df, [50, 100, 150], ['mean hourly RMSE', 'daily freq
 ########################## PLOT OF SUB-HERD TRENDS ####################################
 
 # plot_subherd_trends('LSTM Models/Multivariate Optimisation/batch_size256-100.hdf5', 'Deep Learning Data/Multivariate Lag 120')
+
+########################## NEW MODELLING ###############################################
+# creates a dictionary of all individual errors of multiple models and saves it to file
+compare_model_individual_errors('LSTM Models/n_fold/1_fold', 'Deep Learning Data/Multivariate Lag 200/1_fold', '1_fold')
