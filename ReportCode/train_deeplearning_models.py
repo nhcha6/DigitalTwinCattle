@@ -21,6 +21,54 @@ import random
 from math import floor, ceil
 from keras.initializers import Orthogonal
 
+
+def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[], test_name='forecast'):
+    # define hyper-parameters
+    verbose = 1
+    loss = 'mse'
+    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm, decay=learning_rate/200)
+    activation = 'relu'
+
+    # callback = EarlyStopping(monitor='val_loss', patience=10)
+    filepath = "LSTM Models/Current Test/" + test_name + "-batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    callback_nan = TerminateOnNaN()
+
+    # extract shape of input and output
+    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
+
+    # reshape output into [samples, timesteps, features]
+    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
+    test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
+
+    # define model
+    encoder_input = Input(shape=(n_timesteps, n_features))
+    forecast_input = Input(shape=(24,1))
+
+    encoder_layer_1 = LSTM(encoder_units, activation=activation, kernel_initializer=Orthogonal(), return_state=True)
+    encoder_output, state_h, state_c = encoder_layer_1(encoder_input)
+    encoder_states = [state_h, state_c]
+    decoder_input = RepeatVector(n_outputs)(encoder_output)
+    decoder_input = Dropout(0.2)(decoder_input)
+    decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+    decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_initializer=Orthogonal())
+    decoder_output = decoder_layer(decoder_input, initial_state=encoder_states)
+    dense_input = Dropout(0.2)(decoder_output)
+    dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
+    dense_output = dense_layer(dense_input)
+    outputs = TimeDistributed(Dense(1))(dense_output)
+
+    model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
+    print(model.summary())
+    model.compile(loss=loss, optimizer=optimiser)
+    # fit network
+    if sample_weights:
+        model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, sample_weight=np.array(sample_weights), callbacks=[callback_model, callback_nan])
+    else:
+        model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
+
+    return model
+
 def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[], test_name='forecast'):
     # define hyper-parameters
     verbose = 1
