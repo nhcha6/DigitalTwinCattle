@@ -15,7 +15,6 @@ from keras import Model
 from keras.layers import Concatenate
 from keras.optimizers import adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
-from create_test_train_data import *
 from keras import models
 import pickle
 import random
@@ -67,6 +66,17 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
         model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
 
     return model
+
+def edit_num_lags(train_x, test_x, new_lag):
+    train_x[0] = reduce_lags(new_lag, train_x[0])
+    test_x[0] = reduce_lags(new_lag, test_x[0])
+    return train_x, test_x
+
+def reduce_lags(new_lag, l):
+    l = list(l)
+    for i in range(len(l)):
+        l[i] = l[i][-new_lag:]
+    return np.array(l)
 
 def read_pickle(folder):
     with open(folder + '/x_train.pkl', 'rb') as f:
