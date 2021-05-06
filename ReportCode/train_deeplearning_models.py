@@ -157,6 +157,54 @@ def calculate_sample_weights(y_test, bins, scalar_y):
                 sample_weights.append(weight)
     return sample_weights
 
+
+def convert_to_univariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
+
+def convert_to_bivariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
 def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, decoder_units, dense_neurons, weights_flag=0, learning_rate = 0.001, num_cows = 197, test_name = 'multivariate'):
     # read in data
     x_train, y_train, x_test, y_test, scalar_y = read_pickle(file_name)
@@ -184,12 +232,32 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     if lag!=200:
         x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
+    # change to uni or bivariate data
+    if test_name == 'univariate':
+        x_train, x_test = convert_to_univariate(x_train, x_test)
+    if test_name == 'bivariate':
+        x_train, x_test = convert_to_bivariate(x_train, x_test)
+
     # change train/test size for cross validation
     # x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, num_cows=197)
 
     sample_weights = []
     if weights_flag:
         sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
+
+    # for i in range(1000):
+    #     plt.figure()
+    #     plt.plot(x_train[0][i])
+    #     plt.title('lagged data')
+    #
+    #     plt.figure()
+    #     plt.plot(x_train[1][i])
+    #     plt.title('forecast weather')
+    #
+    #     plt.figure()
+    #     plt.plot(y_train[i])
+    #     plt.title('future panting')
+    #     plt.show()
 
     model = build_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
     return model
@@ -233,7 +301,7 @@ def k_fold_test(batch_dict, saved_data):
                                                                                                           dense_neurons=48,
                                                                                                           weights_flag=7,
                                                                                                           learning_rate=lr,
-                                                                                                          test_name=n_fold)
+                                                                                                          test_name='bivariate')
 
 # Define batch size and learning rate for univariate test
 # batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
@@ -253,5 +321,6 @@ def k_fold_test(batch_dict, saved_data):
 
 # run k fold cross validation test
 # batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
-batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
+# batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
+batch_dict = {256: 0.0005, 128: 0.0005, 64: 0.0005}
 k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')

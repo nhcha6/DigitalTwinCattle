@@ -210,7 +210,31 @@ def convert_to_univariate(train_x, test_x):
 
     return train_x_new, test_x_new
 
-def save_test_train_data(lag, location, univariate = False, n_fold=0, num_cows=197):
+
+def convert_to_bivariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
+def save_test_train_data(lag, location, univariate = False, bivariate = False, n_fold=0, num_cows=197):
     # set test and train values
     if n_fold:
         train_n = int(1455/6) * n_fold + 24 + 201
@@ -239,6 +263,9 @@ def save_test_train_data(lag, location, univariate = False, n_fold=0, num_cows=1
     if univariate:
         x_train, x_test = convert_to_univariate(x_train, x_test)
 
+    if bivariate:
+        x_train, x_test = convert_to_bivariate(x_train, x_test)
+
     # save to file
     write_pickle(x_train, y_train, x_test, y_test, scalar_y, location)
 
@@ -260,7 +287,7 @@ cow_list = sorted(cow_list)
 
 # save n_fold cross validation test and train to file
 for n in range(1,6):
-    save_test_train_data(200, 'Deep Learning Data/Multivariate Lag 200/' + str(n) + '_fold/', n_fold = n)
+    save_test_train_data(120, 'Deep Learning Data/Bivariate Lag 120/' + str(n) + '_fold/', n_fold = n)
 
 # save_test_train_data(120, 'Deep Learning Data/Multivariate Lag 120/', univariate=True)
 # save_test_train_data(120, 'Deep Learning Data/Univariate Lag 120/', univariate=True)

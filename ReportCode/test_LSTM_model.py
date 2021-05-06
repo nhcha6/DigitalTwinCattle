@@ -74,12 +74,6 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
                 print(inf_count)
                 continue
 
-            plt.figure()
-            plt.plot(y_actual_orig, 'actual')
-            plt.plot(y_pred_orig, 'pred')
-            plt.legend()
-            plt.show()
-
             # calculate daily frequency and max
             freq_actual = sum(y_actual_orig)
             freq_forecast = sum(y_pred_orig)
@@ -503,9 +497,20 @@ def herd_trends(y_pred, x_test, y_test, scalar_y, plot=False):
 
     return mean_herd_error
 
-def compare_model_individual_errors(model_location, data_location, name=''):
+def edit_num_lags(train_x, test_x, new_lag):
+    train_x[0] = reduce_lags(new_lag, train_x[0])
+    test_x[0] = reduce_lags(new_lag, test_x[0])
+    return train_x, test_x
+
+def reduce_lags(new_lag, l):
+    l = list(l)
+    for i in range(len(l)):
+        l[i] = l[i][-new_lag:]
+    return np.array(l)
+
+def compare_model_individual_errors(model_location, data_location, lag, name=''):
     error_summary = []
-    for batch_size in [128]:
+    for batch_size in [64, 128, 256]:
         for epochs in [50, 100, 150]:
             try:
                 print('\nBatch Size: ' + str(batch_size))
@@ -514,6 +519,10 @@ def compare_model_individual_errors(model_location, data_location, name=''):
 
                 # extract model data
                 model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_name)
+
+                # reduce number of lags
+                if lag != 200:
+                    x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
                 # predict
                 print("Making Predictions")
@@ -599,6 +608,43 @@ def plot_subherd_trends(model_location, data_location):
     # run herd trends
     herd_trends(y_pred, x_test, y_test, scalar_y, plot=False)
 
+def plot_model_error(error_df, epochs, errors, herd_ind):
+    for error_type in errors:
+        # plot for different epochs
+        plt.figure()
+        for epoch in epochs:
+            epoch_error = error_df[error_df['epochs']==epoch]
+            x = epoch_error['batch size'].values
+            y = epoch_error[error_type].values
+            plt.title(herd_ind + " " + error_type)
+            plt.xlabel('batch size')
+            plt.ylabel('error')
+            plt.plot(x,y,label = 'epoch: ' + str(epoch))
+        plt.legend()
+    plt.show()
+
+def plot_n_fold_error(error_df_n_folds, epochs, batch_sizes, errors, herd_ind):
+    for error_type in errors:
+        # plot for different epochs
+        plt.figure()
+        for epoch in epochs:
+            dummy = error_df_n_folds['1_fold'][error_df_n_folds['1_fold']['epochs']==epoch]
+            for batch_size in batch_sizes:
+                print(epoch)
+                print(batch_size)
+                error_list = []
+                n_fold_list = []
+                for n_fold, error_df in error_df_n_folds.items():
+                    epoch_error = error_df[(error_df['epochs']==epoch) & (error_df['batch size']==batch_size)]
+                    print(epoch_error)
+                    error_list.append(epoch_error[error_type])
+                    n_fold_list.append(n_fold)
+                plt.title("n_fold" + error_type)
+                plt.xlabel('n_fold')
+                plt.ylabel('error')
+                plt.plot(n_fold_list, error_list,label = 'epoch: ' + str(epoch) + ', batch_size: ' + str(batch_size))
+        plt.legend()
+    plt.show()
 
 ################## CREATE ERROR DF FOR MULTIVARIATE TEST ######################
 
@@ -657,6 +703,19 @@ def plot_subherd_trends(model_location, data_location):
 
 # plot_subherd_trends('LSTM Models/Multivariate Optimisation/batch_size256-100.hdf5', 'Deep Learning Data/Multivariate Lag 120')
 
-########################## NEW MODELLING ###############################################
+########################## PAPER MODELLING ###############################################
+
 # creates a dictionary of all individual errors of multiple models and saves it to file
-compare_model_individual_errors('LSTM Models/n_fold/1_fold', 'Deep Learning Data/Multivariate Lag 200/1_fold', '1_fold')
+# for fold in ['5_fold']:
+#     compare_model_individual_errors('LSTM Models/n_fold/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold, 120, fold)
+
+n_fold_error_df = {}
+for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+    ind_error_df = pd.read_pickle('LSTM Models/n_fold/' + fold + '/individual_error_summary.pkl')
+    # ensure df is sorted so plots look nice
+    ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+    # n_fold_error_df
+    n_fold_error_df[fold] = ind_error_df
+
+# plot errors
+plot_n_fold_error(n_fold_error_df, [50, 100, 150], [128], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
