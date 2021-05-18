@@ -105,7 +105,7 @@ def build_model(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_un
     outputs = TimeDistributed(Dense(1))(dense_output)
 
     model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
-    # print(model.summary())
+    print(model.summary())
     model.compile(loss=loss, optimizer=optimiser)
     # fit network
     if sample_weights:
@@ -233,18 +233,15 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
     # change to uni or bivariate data
-    if test_name == 'univariate':
+    if test_name[0:10] == 'univariate':
         x_train, x_test = convert_to_univariate(x_train, x_test)
-    if test_name == 'bivariate':
+    if test_name[0:9] == 'bivariate':
         x_train, x_test = convert_to_bivariate(x_train, x_test)
-
-    # change train/test size for cross validation
-    # x_train, y_train, x_test, y_test = change_test_train_ratio(x_train, y_train, x_test, y_test, num_cows=197)
 
     sample_weights = []
     if weights_flag:
         sample_weights = calculate_sample_weights(y_train, weights_flag, scalar_y)
-
+    #
     # for i in range(1000):
     #     plt.figure()
     #     plt.plot(x_train[0][i])
@@ -259,7 +256,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     #     plt.title('future panting')
     #     plt.show()
 
-    model = build_model(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
+    model = build_model_init_states(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
     return model
 
 def change_test_train_ratio(x_train, y_train, x_test, y_test, train_size = 500, num_cows=197):
@@ -296,12 +293,12 @@ def k_fold_test(batch_dict, saved_data):
         n_fold = str(n) + '_fold'
         for batch_size, lr in batch_dict.items():
             n_fold_file = saved_data + '/' + n_fold
-            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=150, encoder_units=32,
+            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=150, encoder_units=64,
                                                                                                           decoder_units=64,
                                                                                                           dense_neurons=48,
                                                                                                           weights_flag=7,
                                                                                                           learning_rate=lr,
-                                                                                                          test_name='bivariate')
+                                                                                                          test_name='init_hidden_' + n_fold)
 
 # Define batch size and learning rate for univariate test
 # batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
@@ -322,5 +319,7 @@ def k_fold_test(batch_dict, saved_data):
 # run k fold cross validation test
 # batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
 # batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
-batch_dict = {256: 0.0005, 128: 0.0005, 64: 0.0005}
+# batch_dict = {256: 0.0005, 128: 0.0005, 64: 0.0005}
+batch_dict = {128: 0.0002}
 k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')
+

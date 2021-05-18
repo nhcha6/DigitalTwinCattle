@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from matplotlib import pyplot as plt
 from keras import models
 import pickle
+from post_processing_model import *
 
 def import_model(test_file, model_file):
     x_train, y_train, x_test, y_test, scalar_y = read_pickle(test_file)
@@ -36,6 +37,69 @@ def create_category_dict(category_header, cow_ID_header, details_df):
         category_dict[category] = details_df[cow_ID_header][details_df[category_header] == category].tolist()
     #print(category_dict)
     return category_dict
+
+def timeseries_error(y_pred, test_x, test_y, train_x, norm_y, num_cows=197,y_prev=0, plot=False):
+    test_x = test_x[0]
+
+    samples_per_cow = int(test_x.shape[0]/num_cows)
+
+    # error calc
+    timeseries_errors = []
+    timeseries_errors_ignore = []
+    weather_timeseries = []
+
+    for sample_n in range(y_prev, samples_per_cow):
+        sample_errors = []
+        sample_errors_ignore = []
+        for cow_n in range(0,num_cows):
+            # extract prediction
+            i = sample_n + cow_n*samples_per_cow
+            y_pred_orig = norm_y.inverse_transform(y_pred[i])
+            test_y_i = test_y[i].reshape(-1,1)
+            y_actual_orig = norm_y.inverse_transform(test_y_i)
+
+            # calculate hourly RMSE
+            error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
+            sample_errors.append(error)
+
+            if error < 40:
+                sample_errors_ignore.append(error)
+
+        if sample_n % 24 == 0:
+            weather_timeseries.extend([4*x for x in train_x[1][i]])
+            # print(weather_timeseries)
+
+        timeseries_errors.append(sum(sample_errors)/len(sample_errors))
+        timeseries_errors_ignore.append(sum(sample_errors_ignore)/len(sample_errors_ignore))
+
+    return timeseries_errors, timeseries_errors_ignore, weather_timeseries
+
+def calc_cow_errors(y_pred, test_x, test_y, train_x, norm_y, num_cows=197,y_prev=0, plot=False):
+    test_x = test_x[0]
+
+    samples_per_cow = int(test_x.shape[0]/num_cows)
+
+    # error calc
+    cow_errors = []
+
+    for cow_n in range(0, num_cows):
+        cow = []
+        for sample_n in range(y_prev, samples_per_cow):
+            # extract prediction
+            i = sample_n + cow_n*samples_per_cow
+            y_pred_orig = norm_y.inverse_transform(y_pred[i])
+            test_y_i = test_y[i].reshape(-1,1)
+            y_actual_orig = norm_y.inverse_transform(test_y_i)
+
+            # calculate hourly RMSE
+            error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
+            cow.append(error)
+
+        average_error = sum(cow)/len(cow)
+        cow_errors.append(average_error)
+
+
+    return cow_errors
 
 def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False):
     test_x = test_x[0]
@@ -508,8 +572,57 @@ def reduce_lags(new_lag, l):
         l[i] = l[i][-new_lag:]
     return np.array(l)
 
-def compare_model_individual_errors(model_location, data_location, lag, name=''):
-    error_summary = []
+
+def convert_to_univariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
+
+def convert_to_bivariate(train_x, test_x):
+    train_x_new = []
+    test_x_new = []
+    train_x_old = train_x[0]
+    test_x_old = test_x[0]
+    # create new train x
+    for sample in train_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        train_x_new.append(new_sample)
+    # create new test x
+    for sample in test_x_old:
+        new_sample = []
+        for time_step in sample:
+            new_sample.append([time_step[0], time_step[2]])
+        test_x_new.append(new_sample)
+
+    test_x_new = [np.array(test_x_new), test_x[1]]
+    train_x_new = [np.array(train_x_new), train_x[1]]
+
+    return train_x_new, test_x_new
+
+def compare_model_individual_errors(model_location, data_location, lag, name='', forecast_error = True, post_process = False):
+    forecast_error_summary = []
+    post_process_error = []
     for batch_size in [64, 128, 256]:
         for epochs in [50, 100, 150]:
             try:
@@ -524,20 +637,91 @@ def compare_model_individual_errors(model_location, data_location, lag, name='')
                 if lag != 200:
                     x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
+                # change to uni or bivariate data
+                if name[0:10] == 'univariate':
+                    x_train, x_test = convert_to_univariate(x_train, x_test)
+                if name[0:9] == 'bivariate':
+                    x_train, x_test = convert_to_bivariate(x_train, x_test)
+
                 # predict
                 print("Making Predictions")
                 y_pred = model.predict(x_test)
 
                 print("Calculating Error")
-                mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+                if forecast_error:
+                    mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False)
+                    forecast_error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
 
-                error_summary.append([batch_size, epochs, mean_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
-            except OSError:
+                if post_process:
+                    sens_old, spec_old, sens_new, spec_new, pos_perc_max, pos_perc_count = max_count_threshold_model(x_train,
+                                                                                                                     y_train,
+                                                                                                                     x_test,
+                                                                                                                     y_test,
+                                                                                                                     model,
+                                                                                                                     scalar_y,
+                                                                                                                     learning_rate=0.001,
+                                                                                                                     batch_size=16,
+                                                                                                                     epochs=10,
+                                                                                                                     thresh_pant=12,
+                                                                                                                     thresh_count=4,
+                                                                                                                     test=True)
+
+                    post_process_error.append([batch_size, epochs, sens_old, spec_old, sens_new, spec_new, pos_perc_max, pos_perc_count])
+
+            # except OSError:
+            except Exception as e:
+                print(e)
                 continue
 
-    error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
-    print(error_summary_df)
-    error_summary_df.to_pickle(model_location + '/individual_error_summary.pkl')
+    if forecast_error:
+        error_summary_df = pd.DataFrame(forecast_error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
+        print(error_summary_df)
+        error_summary_df.to_pickle(model_location + '/individual_error_summary.pkl')
+
+    if post_process:
+        post_process_summary_df = pd.DataFrame(post_process_error, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
+        print(post_process_summary_df)
+        post_process_summary_df.to_pickle(model_location + '/post_process_error_summary.pkl')
+
+def plot_timeseries_error(model_path, data_location, lag, model_name):
+    # extract model data
+    model, x_train, y_train, x_test, y_test, scalar_y = import_model(data_location, model_path)
+
+    # reduce number of lags
+    if lag != 200:
+        x_train, x_test = edit_num_lags(x_train, x_test, lag)
+
+    # change to uni or bivariate data
+    if model_name[0:10] == 'univariate':
+        x_train, x_test = convert_to_univariate(x_train, x_test)
+    if model_name[0:9] == 'bivariate':
+        x_train, x_test = convert_to_bivariate(x_train, x_test)
+
+    # predict
+    print("Making Predictions")
+    y_pred = model.predict(x_test)
+
+    # timeseries error
+    error_timeseries, error_timeseries_ignore, weather_timeseries = timeseries_error(y_pred, x_test, y_test, x_train, scalar_y, plot=False)
+    # cow error
+    cow_error_list = calc_cow_errors(y_pred, x_test, y_test, x_train, scalar_y, plot=False)
+
+    plt.figure()
+    plt.plot(error_timeseries, 'bo')
+    plt.title(model_name + ': Average Error Over Time')
+
+    plt.figure()
+    plt.plot(error_timeseries_ignore, 'bo', label = 'RMSE')
+    plt.plot(weather_timeseries, label= 'HLI')
+    plt.title(model_name + ': Average Error Over Time')
+
+    plt.figure()
+    plt.plot(cow_error_list, 'bo')
+    n = [x for x in range(len(cow_error_list))]
+    for i, txt in enumerate(n):
+        plt.annotate(txt, (i, cow_error_list[i]))
+    plt.title("Average Error per Cow")
+    plt.show()
 
 def compare_model_herd_errors(model_location, data_location, name = ''):
     error_summary = []
@@ -567,6 +751,7 @@ def compare_model_herd_errors(model_location, data_location, name = ''):
     error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
     print(error_summary_df)
     error_summary_df.to_pickle(model_location + '/herd_error_summary.pkl')
+
 
 def plot_model_error(error_df, epochs, errors, herd_ind):
     for error_type in errors:
@@ -639,12 +824,67 @@ def plot_n_fold_error(error_df_n_folds, epochs, batch_sizes, errors, herd_ind):
                     print(epoch_error)
                     error_list.append(epoch_error[error_type])
                     n_fold_list.append(n_fold)
-                plt.title("n_fold" + error_type)
+                plt.title("n_fold " + error_type)
                 plt.xlabel('n_fold')
                 plt.ylabel('error')
                 plt.plot(n_fold_list, error_list,label = 'epoch: ' + str(epoch) + ', batch_size: ' + str(batch_size))
         plt.legend()
     plt.show()
+
+def compare_models_n_fold(model_paths, batch_sizes, epochs, errors, model_names):
+    model_error_dfs = {}
+    for i in range(len(model_paths)):
+        model_path = model_paths[i]
+        model_name = model_names[i]
+        model_error_dfs[model_name] = {}
+        for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+            ind_error_df = pd.read_pickle(model_path + fold + '/individual_error_summary.pkl')
+            # ensure df is sorted so plots look nice
+            ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+            # n_fold_error_df
+            model_error_dfs[model_name][fold] = ind_error_df
+
+    # model_2_error_df = {}
+    # # for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+    # for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+    #     ind_error_df = pd.read_pickle(model_2_path + fold + '/individual_error_summary.pkl')
+    #     # ensure df is sorted so plots look nice
+    #     ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+    #     # n_fold_error_df
+    #     model_2_error_df[fold] = ind_error_df
+
+    for error_type in errors:
+        # plot for different epochs
+        plt.figure()
+
+        # iterate through two models
+        i = 0
+        for model_name, n_fold_error_df in model_error_dfs.items():
+            # extract model 1 epoch
+            epoch = epochs[i]
+            batch_size = batch_sizes[i]
+            print(epoch)
+            print(batch_size)
+
+            # build errors to plot
+            error_list = []
+            n_fold_list = []
+            for n_fold, error_df in n_fold_error_df.items():
+                epoch_error = error_df[(error_df['epochs']==epoch) & (error_df['batch size']==batch_size)]
+                print(epoch_error[error_type])
+                error_list.append(epoch_error[error_type])
+                n_fold_list.append(n_fold)
+            plt.title("n_fold " + error_type)
+            plt.xlabel('n_fold')
+            plt.ylabel('error')
+            plt.plot(n_fold_list, error_list,label = model_name)
+            plt.legend()
+
+            # increase index
+            i+=1
+    plt.show()
+
+
 
 ################## CREATE ERROR DF FOR MULTIVARIATE TEST ######################
 
@@ -706,16 +946,26 @@ def plot_n_fold_error(error_df_n_folds, epochs, batch_sizes, errors, herd_ind):
 ########################## PAPER MODELLING ###############################################
 
 # creates a dictionary of all individual errors of multiple models and saves it to file
-# for fold in ['5_fold']:
-#     compare_model_individual_errors('LSTM Models/n_fold/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold, 120, fold)
-
-n_fold_error_df = {}
 for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
-    ind_error_df = pd.read_pickle('LSTM Models/n_fold/' + fold + '/individual_error_summary.pkl')
-    # ensure df is sorted so plots look nice
-    ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
-    # n_fold_error_df
-    n_fold_error_df[fold] = ind_error_df
+    compare_model_individual_errors('LSTM Models/univariate n_fold/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold, 120, 'univariate_' + fold, forecast_error=False, post_process=True)
+#
+# n_fold_error_df = {}
+# for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+#     ind_error_df = pd.read_pickle('LSTM Models/univariate n_fold/' + fold + '/individual_error_summary.pkl')
+#     # ensure df is sorted so plots look nice
+#     ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+#     # n_fold_error_df
+#     n_fold_error_df[fold] = ind_error_df
 
 # plot errors
-plot_n_fold_error(n_fold_error_df, [50, 100, 150], [128], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
+# plot_n_fold_error(n_fold_error_df, [100], [64, 128, 256], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
+# plot_n_fold_error(n_fold_error_df, [50, 100,150], [128], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
+
+# compare models from different tests
+# compare_models_n_fold(['LSTM Models/multivariate n_fold/', 'LSTM Models/univariate n_fold/', 'LSTM Models/bivariate n_fold/'], [128, 128, 128], [100, 150, 100], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], ['optimal multivariate', 'optimal univariate', 'optimal bivariate'])
+
+# plot the timeseries and cattle error across an n_fold test
+# for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+#     plot_timeseries_error('LSTM Models/multivariate n_fold/' + fold + '/' + fold + '-batch_size128-100.hdf5', 'Deep Learning Data/Multivariate Lag 200/' + fold, 120, 'Optimal Multivariate')
+
+# compare_model_individual_errors('LSTM Models/multivariate n_fold/4_fold' , 'Deep Learning Data/Multivariate Lag 200/4_fold', 120, '4_fold')
