@@ -117,7 +117,7 @@ def calculate_threshold_svm(y, scalar_y, thresh):
 
 def max_thresh_model(train_x, train_y, learning_rate, epochs, batch_size, sample_weights):
     # define hyper-parameters to be optimised
-    verbose = 1
+    verbose = 0
     loss = 'binary_crossentropy'
     optimiser = adam(learning_rate=learning_rate, clipnorm=0.5)
     activation = 'relu'

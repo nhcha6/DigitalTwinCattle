@@ -21,7 +21,6 @@ import random
 from math import floor, ceil
 from keras.initializers import Orthogonal
 
-
 def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[], test_name='forecast'):
     # define hyper-parameters
     verbose = 1
@@ -31,7 +30,7 @@ def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs
 
     # callback = EarlyStopping(monitor='val_loss', patience=10)
     filepath = "LSTM Models/Current Test/" + test_name + "-batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
-    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=50)
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=25)
     callback_nan = TerminateOnNaN()
 
     # extract shape of input and output
@@ -50,10 +49,26 @@ def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs
     encoder_states = [state_h, state_c]
     decoder_input = RepeatVector(n_outputs)(encoder_output)
     decoder_input = Dropout(0.2)(decoder_input)
-    decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+
+    # pooling layer: augment for testing
+    # append entire forecast, potentially pass through dense layer
+    repeat_forecast = Flatten()(forecast_input)
+    repeat_forecast = RepeatVector(n_outputs)(repeat_forecast)
+    decoder_input = Concatenate(axis=2)([decoder_input, repeat_forecast])
+    # decoder_input = TimeDistributed(Dense(64, activation=activation))(decoder_input)
+
+    # original pooling:
+    # decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+
     decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_initializer=Orthogonal())
     decoder_output = decoder_layer(decoder_input, initial_state=encoder_states)
     dense_input = Dropout(0.2)(decoder_output)
+
+    # post pooling of forecast data
+    # repeat_forecast = Flatten()(forecast_input)
+    # repeat_forecast = RepeatVector(n_outputs)(repeat_forecast)
+    # dense_input = Concatenate(axis=2)([dense_input, repeat_forecast])
+
     dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
     dense_output = dense_layer(dense_input)
     outputs = TimeDistributed(Dense(1))(dense_output)
@@ -288,17 +303,17 @@ def grid_search(batch_dict, saved_data, test_name):
                                                                                                       test_name=test_name)
 
 def k_fold_test(batch_dict, saved_data):
-    # loop through and test each model
+    # loop through and run each model
     for n in range(1,6):
         n_fold = str(n) + '_fold'
         for batch_size, lr in batch_dict.items():
             n_fold_file = saved_data + '/' + n_fold
-            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=150, encoder_units=64,
+            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=125, encoder_units=64,
                                                                                                           decoder_units=64,
-                                                                                                          dense_neurons=48,
+                                                                                                          dense_neurons=64,
                                                                                                           weights_flag=7,
                                                                                                           learning_rate=lr,
-                                                                                                          test_name='init_hidden_' + n_fold)
+                                                                                                          test_name='' + n_fold)
 
 # Define batch size and learning rate for univariate test
 # batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
@@ -318,8 +333,8 @@ def k_fold_test(batch_dict, saved_data):
 
 # run k fold cross validation test
 # batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
-# batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
+batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
 # batch_dict = {256: 0.0005, 128: 0.0005, 64: 0.0005}
-batch_dict = {128: 0.0002}
+# batch_dict = {128: 0.0002}
 k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')
 
