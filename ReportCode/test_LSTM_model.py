@@ -123,7 +123,8 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     forecast = test_x[1]
     test_x = test_x[0]
 
-    samples_per_cow = int(test_x.shape[0]/num_cows)
+    samples_per_cow = int(test_y.shape[0]/num_cows)
+
     # print(samples_per_cow)
 
     # error calc
@@ -764,10 +765,37 @@ def compare_model_individual_errors(model_location, data_location, lag, name='',
             # predict
             print("Making Predictions")
             if name[0:9] == 'iterative':
-                x_test = np.array([[x_test[0][0]], [x_test[1][0]]])
-                y_pred = model.predict(x_test)
-                print(x_test)
-                print(y_pred)
+                x_train, x_test = convert_to_univariate(x_train, x_test)
+                y_pred = []
+                y_test_new = []
+                # need to also update x_test
+                # need to account for change in animals
+                samples_per_cow = int(len(x_test[0])/197)
+                for cow in range(197):
+                    print(cow)
+                    for i in range(samples_per_cow-24):
+                        index = cow*samples_per_cow + i
+                        panting_series = np.array([x_test[0][index]])
+                        y_test_new.append(y_test[index])
+                        # print(panting_series)
+                        for j in range(24):
+                            x_test_sample = [panting_series, np.array([x_test[1][index+j]])]
+                            y_pred_sample = model.predict(x_test_sample)
+                            # print(panting_series)
+                            # print(y_pred_sample[0][0])
+                            panting_series = np.delete(panting_series,0)
+                            panting_series = np.append(panting_series,y_pred_sample)
+                            panting_series = panting_series.reshape((1,120,1))
+                            # print(panting_series)
+                        # print(panting_series)
+                        pred = panting_series[0,-24:]
+                        # print(pred)
+                        y_pred.append(pred)
+                        # plt.figure()
+                        # plt.plot(pred)
+                        # plt.plot(y_test[i])
+                        # plt.show()
+                y_test = np.array(y_test_new)
             else:
                 # x_test[0] only when no forecasts considered
                 y_pred = model.predict(x_test)
@@ -1018,13 +1046,13 @@ for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
 # for fold in ['4_fold_skip']:
     print(fold)
     # declare name of models
-    name = 'univariate_150lag'
+    name = 'iterative_'
     # augment the skip
     if fold == '4_fold_skip':
         skip_4_fold = True
     # baseline_individual_errors('LSTM Models/Baseline/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, 'no_forecast_' + fold[0:6], forecast_error=True, post_process=False, skip_4_fold = skip_4_fold)
-    # compare_model_individual_errors('LSTM Models/Iterative Pred/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
-    compare_model_individual_errors('LSTM Models/Lag Test/Univariate/150/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 150, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
+    compare_model_individual_errors('LSTM Models/Iterative Pred/Univariate/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
+    # compare_model_individual_errors('LSTM Models/Lag Test/Univariate/150/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 150, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
 
 n_fold_error_df = {}
 for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
