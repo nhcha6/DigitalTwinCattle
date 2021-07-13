@@ -104,12 +104,27 @@ def calc_cow_errors(y_pred, test_x, test_y, train_x, norm_y, num_cows=197,y_prev
 
     return cow_errors
 
+def calc_R_squared(x_values, y_values):
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
+    x_values = x_values.reshape(-1,)
+    y_values = y_values.reshape(-1,)
+
+    correlation_matrix = np.corrcoef(x_values.astype(float), y_values.astype(float))
+    correlation_xy = correlation_matrix[0, 1]
+    # plt.figure()
+    # plt.plot(x_values, y_values, 'bo')
+    # plt.show()
+    r_squared = correlation_xy ** 2
+    # print(r_squared)
+    return r_squared
+
 def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False, skip_4_fold = False):
     forecast = test_x[1]
     test_x = test_x[0]
 
     samples_per_cow = int(test_x.shape[0]/num_cows)
-    print(samples_per_cow)
+    # print(samples_per_cow)
 
     # error calc
     false_pos_freq = 0
@@ -121,6 +136,9 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     total_pos_max = 0
     total_neg_max = 0
     hourly_errors = []
+    r_squareds = []
+    pred = []
+    actual = []
     daily_errors = []
     max_errors = []
     thresh_count_errors = []
@@ -131,7 +149,7 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     for sample_n in range(y_prev, samples_per_cow):
         # skip the
         # print(skip_4_fold)
-        print(sample_n)
+        # print(sample_n)
         if (skip_4_fold) and (sample_n in [a for a in range(192, 222)]):
             print('skipped')
             continue
@@ -152,6 +170,9 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
 
             # calculate hourly RMSE
             error = mean_squared_error(y_actual_orig, y_pred_orig, squared=False)
+            r_squared = calc_R_squared(y_actual_orig, y_pred_orig)
+            pred.extend(y_pred_orig)
+            actual.extend(y_actual_orig)
 
             # if error > 20:
             #     print(sample_n)
@@ -180,6 +201,7 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
 
             # append errors
             hourly_errors.append(error)
+            r_squareds.append(r_squared)
             daily_errors.append(daily_error)
             max_errors.append(max_error)
 
@@ -227,11 +249,12 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
                 plt.legend()
                 plt.show()
 
-    print("Total Pos: " + str(total_pos_freq/samples))
+    print("Total Pos: " + str(total_pos_max/samples))
 
     # calculate summary errors
     mean_hourly_RMSE = np.mean(hourly_errors)
     median_hourly_RMSE = np.median(hourly_errors)
+    mean_r_squared = calc_R_squared(actual, pred)
     RMSE_daily_freq = np.mean(daily_errors)
     RMSE_max = np.mean(max_errors)
     sensitivity_freq_total = (total_pos_freq-false_neg_freq)/total_pos_freq
@@ -246,6 +269,8 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     print(mean_hourly_RMSE)
     print("\nMEDIAN HOURLY RMSE")
     print(median_hourly_RMSE)
+    print("\nMEAN R SQUARED")
+    print(mean_r_squared)
     print("\nRMSE DAILY FREQ")
     print(RMSE_daily_freq)
     print("\nRMSE MAX ERROR")
@@ -263,7 +288,7 @@ def test_error(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False
     print("\n")
     print("\n")
 
-    return mean_hourly_RMSE, median_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total
+    return mean_hourly_RMSE, median_hourly_RMSE, mean_r_squared, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total
 
 def test_error_herd(y_pred, test_x, test_y, norm_y, num_cows=197,y_prev=0, plot=False):
     test_x = test_x[0]
@@ -604,7 +629,6 @@ def reduce_lags(new_lag, l):
         l[i] = l[i][-new_lag:]
     return np.array(l)
 
-
 def convert_to_univariate(train_x, test_x):
     train_x_new = []
     test_x_new = []
@@ -627,7 +651,6 @@ def convert_to_univariate(train_x, test_x):
     train_x_new = [np.array(train_x_new), train_x[1]]
 
     return train_x_new, test_x_new
-
 
 def convert_to_bivariate(train_x, test_x):
     train_x_new = []
@@ -713,8 +736,8 @@ def compare_model_individual_errors(model_location, data_location, lag, name='',
     post_process_error = []
     for batch_size in [128]:
         # for epochs in [50, 100, 150]:
-        # for epochs in [25, 50, 75, 100]:
-        for epochs in [75]:
+        for epochs in [25, 50, 75, 100]:
+        # for epochs in [75]:
             # try:
             print('\nBatch Size: ' + str(batch_size))
             print('Epochs: ' + str(epochs))
@@ -739,14 +762,20 @@ def compare_model_individual_errors(model_location, data_location, lag, name='',
                 x_train, x_test = convert_to_bivariate(x_train, x_test)
 
             # predict
-            # x_test[0] only when no forecasts considered
             print("Making Predictions")
-            y_pred = model.predict(x_test)
+            if name[0:9] == 'iterative':
+                x_test = np.array([[x_test[0][0]], [x_test[1][0]]])
+                y_pred = model.predict(x_test)
+                print(x_test)
+                print(y_pred)
+            else:
+                # x_test[0] only when no forecasts considered
+                y_pred = model.predict(x_test)
 
             print("Calculating Error")
             if forecast_error:
-                mean_hourly_RMSE, median_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False, skip_4_fold=skip_4_fold)
-                forecast_error_summary.append([batch_size, epochs, mean_hourly_RMSE, median_hourly_RMSE, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
+                mean_hourly_RMSE, median_hourly_RMSE, mean_r_squared, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total = test_error(y_pred, x_test, y_test, scalar_y, plot=False, skip_4_fold=skip_4_fold)
+                forecast_error_summary.append([batch_size, epochs, mean_hourly_RMSE, median_hourly_RMSE,mean_r_squared, RMSE_daily_freq, thresh_count_RMSE, sensitivity_freq_total, specificity_freq_total, RMSE_max, sensitivity_max_total, specificity_max_total])
 
             if post_process:
                 sens_old, spec_old, sens_new, spec_new, pos_perc_max, pos_perc_count = max_count_threshold_model(x_train,
@@ -770,7 +799,7 @@ def compare_model_individual_errors(model_location, data_location, lag, name='',
             #     continue
 
     if forecast_error:
-        error_summary_df = pd.DataFrame(forecast_error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'median hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
+        error_summary_df = pd.DataFrame(forecast_error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'median hourly RMSE', 'r squared','daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
         print(error_summary_df)
         path = '/individual_error_summary.pkl'
         error_summary_df.to_pickle(model_location + path)
@@ -848,7 +877,6 @@ def compare_model_herd_errors(model_location, data_location, name = ''):
     error_summary_df = pd.DataFrame(error_summary, columns=['batch size', 'epochs', 'mean hourly RMSE', 'daily freq RMSE', 'thresh_count_RMSE', 'thresh sensitivity', 'thresh specificity', 'max RMSE', 'max sensitivity', 'max specificity'])
     print(error_summary_df)
     error_summary_df.to_pickle(model_location + '/herd_error_summary.pkl')
-
 
 def plot_model_error(error_df, epochs, errors, herd_ind):
     for error_type in errors:
@@ -929,13 +957,13 @@ def plot_n_fold_error(error_df_n_folds, epochs, batch_sizes, errors, herd_ind):
         plt.legend()
     plt.show()
 
-def compare_models_n_fold(model_paths, batch_sizes, epochs, errors, model_names, error_dict_name):
+def compare_models_n_fold(model_paths, batch_sizes, epochs, errors, model_names, error_dict_name, test_name = 'Default Test'):
     model_error_dfs = {}
     for i in range(len(model_paths)):
         model_path = model_paths[i]
         model_name = model_names[i]
         model_error_dfs[model_name] = {}
-        for fold in ['1_fold', '2_fold', '3_fold', '4_fold_skip', '5_fold']:
+        for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
             try:
                 ind_error_df = pd.read_pickle(model_path + fold + '/' + error_dict_name)
                 # ensure df is sorted so plots look nice
@@ -966,10 +994,12 @@ def compare_models_n_fold(model_paths, batch_sizes, epochs, errors, model_names,
                 epoch_error = error_df[(error_df['epochs']==epoch) & (error_df['batch size']==batch_size)]
                 print(epoch_error[error_type])
                 error_list.append(epoch_error[error_type])
-                n_fold_list.append(n_fold + " (" + str(n_fold_perc_pos[n_fold]) + ")")
-            plt.title("n_fold " + error_type)
-            plt.xlabel('n_fold')
-            plt.ylabel('error')
+                # n_fold_list.append(n_fold + " (" + str(n_fold_perc_pos[n_fold]) + ")")
+                n_fold_list.append(n_fold[0])
+            plt.title(error_type)
+            plt.title(error_type.title().replace('Rmse', 'RMSE') + ' for ' + test_name)
+            plt.xlabel('Fold')
+            plt.ylabel('RMSE')
             plt.plot(n_fold_list, error_list,label = model_name)
             plt.legend()
 
@@ -980,42 +1010,55 @@ def compare_models_n_fold(model_paths, batch_sizes, epochs, errors, model_names,
 
 ########################## PAPER MODELLING ###############################################
 # n_fold percentage positive:
-n_fold_perc_pos = {'1_fold': 0.104, '2_fold': 0.192, '3_fold': 0.323, '4_fold': 0.206, '4_fold_skip': 0.206, '5_fold': 0.220}
+n_fold_perc_pos = {'1_fold': 0.244, '2_fold': 0.384, '3_fold': 0.487, '4_fold': 0.356, '4_fold_skip': 0.206, '5_fold': 0.323}
 
 # creates a dictionary of all individual errors of multiple models and saves it to file
 skip_4_fold = False
-# for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '4_fold_skip', '5_fold']:
+for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
 # for fold in ['4_fold_skip']:
-#     print(fold)
-#     # declare name of models
-#     name = 'no_forecast_'
-#     # augment the skip
-#     if fold == '4_fold_skip':
-#         skip_4_fold = True
-#     # baseline_individual_errors('LSTM Models/Baseline/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, 'no_forecast_' + fold[0:6], forecast_error=True, post_process=False, skip_4_fold = skip_4_fold)
-#     compare_model_individual_errors('LSTM Models/Pooling Test/pool all forecast/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
-#     compare_model_individual_errors('LSTM Models/Pooling Test/post pooling/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
+    print(fold)
+    # declare name of models
+    name = 'univariate_150lag'
+    # augment the skip
+    if fold == '4_fold_skip':
+        skip_4_fold = True
+    # baseline_individual_errors('LSTM Models/Baseline/' + fold , 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, 'no_forecast_' + fold[0:6], forecast_error=True, post_process=False, skip_4_fold = skip_4_fold)
+    # compare_model_individual_errors('LSTM Models/Iterative Pred/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 120, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
+    compare_model_individual_errors('LSTM Models/Lag Test/Univariate/150/' + fold, 'Deep Learning Data/Multivariate Lag 200/' + fold[0:6], 150, name + fold[0:6], forecast_error=True, post_process=False, skip_4_fold=skip_4_fold)
 
-# n_fold_error_df = {}
-# for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
-#     ind_error_df = pd.read_pickle('LSTM Models/Pooling Test/dense pooling/'+ fold + '/individual_error_summary.pkl')
-#     # ensure df is sorted so plots look nice
-#     ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
-#     # n_fold_error_df
-#     n_fold_error_df[fold] = ind_error_df
+n_fold_error_df = {}
+for fold in ['1_fold', '2_fold', '3_fold', '4_fold', '5_fold']:
+    ind_error_df = pd.read_pickle('LSTM Models/Lag Test/Univariate/150/' + fold + '/individual_error_summary.pkl')
+    # ensure df is sorted so plots look nice
+    ind_error_df = ind_error_df.sort_values(by=['batch size', 'epochs'])
+    # n_fold_error_df
+    n_fold_error_df[fold] = ind_error_df
 
 # plot errors
-# plot_n_fold_error(n_fold_error_df, [100], [64, 128, 256], ['mean hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
-# plot_n_fold_error(n_fold_error_df, [25, 50, 75, 100], [128], ['mean hourly RMSE', 'median hourly RMSE', 'thresh sensitivity', 'thresh specificity'], fold)
+# plot_n_fold_error(n_fold_error_df, [75], [64, 128, 256], ['mean hourly RMSE', 'median hourly RMSE'], fold)
+# plot_n_fold_error(n_fold_error_df, [25, 50, 75, 100], [128], ['mean hourly RMSE', 'median hourly RMSE', 'r squared'], fold)
 
 # plot entire workflow errors:
 # plot_n_fold_error(n_fold_error_df, [100], [64, 128, 256], ['old sens', 'new sens', 'old spec', ' new spec'], fold)
 
 # compare models from different tests
-# compare_models_n_fold(['LSTM Models/Pooling Test/no forecast/', 'LSTM Models/Pooling Test/baseline pooling/', 'LSTM Models/Pooling Test/post pooling/', 'LSTM Models/Pooling Test/pool all forecast/', 'LSTM Models/Baseline/'], [128, 128, 128, 128, 128], [25, 50, 75, 75, 75], ['mean hourly RMSE', 'median hourly RMSE', 'thresh sensitivity', 'thresh specificity'], ['no_forecast', 'baseline', 'post pooling', 'pool all', 'basic'], 'individual_error_summary.pkl')
-compare_models_n_fold(['LSTM Models/Pooling Test/no forecast/', 'LSTM Models/Pooling Test/post pooling/', 'LSTM Models/Pooling Test/pool all forecast/'], [128, 128, 128], [25, 75, 75], ['mean hourly RMSE', 'median hourly RMSE'], ['no_forecast', 'post pooling', 'pool all'], 'individual_error_summary.pkl')
+# Lag tests
+# analysis of R squared. Potentially include in all tests to show overall performance.
+# compare_models_n_fold(['LSTM Models/Pooling Test/pool all forecast/', 'LSTM Models/Lag Test/Multivariate/90/', 'LSTM Models/Lag Test/Univariate/150/'], [128, 128, 128], [75, 25, 50], ['mean hourly RMSE', 'median hourly RMSE', 'r squared'], ['pool all', '90_lag', '150_lag_uni'], 'individual_error_summary.pkl')
+
 
 # plot the timeseries and cattle error across an n_fold test
 # for fold in ['4_fold']:
 #     plot_timeseries_error('LSTM Models/Pooling Test/pool all forecast/' + fold + '/no_forecast_' + fold + '-batch_size128-75.hdf5', 'Deep Learning Data/Multivariate Lag 200/' + fold, 120, 'Optimal Multivariate')
 
+# paper compare model tests
+# # crude grid search
+# compare_models_n_fold(['LSTM Models/Pooling Test/pool all forecast/', 'LSTM Models/input n_fold 2/multivariate/', 'LSTM Models/input n_fold 2/multivariate/'], [128, 256, 64], [75, 75, 50], ['mean hourly RMSE', 'median hourly RMSE'], ['128', '256', '64'], 'individual_error_summary.pkl')
+# # pooling method
+# compare_models_n_fold(['LSTM Models/Pooling Test/no forecast/', 'LSTM Models/Pooling Test/post pooling/', 'LSTM Models/Pooling Test/pool all forecast/'], [128, 128, 128], [25, 75, 75], ['mean hourly RMSE', 'median hourly RMSE'], ['No Forecast', 'Post Pooling', 'Mid Pooling'], 'individual_error_summary.pkl')
+# # input data type
+# compare_models_n_fold(['LSTM Models/input n_fold 2/bivariate/', 'LSTM Models/Pooling Test/pool all forecast/', 'LSTM Models/input n_fold 2/univariate/'], [128, 128, 128], [75, 75, 50], ['mean hourly RMSE', 'median hourly RMSE'], ['Bivariate', 'Multivariate', 'Univariate'], 'individual_error_summary.pkl')
+# # multivariate lag
+# compare_models_n_fold(['LSTM Models/Pooling Test/pool all forecast/', 'LSTM Models/Lag Test/multivariate/90/', 'LSTM Models/Lag Test/multivariate/60/'], [128, 128, 128], [75, 25, 100], ['mean hourly RMSE', 'median hourly RMSE'], ['Multivariate 120 Lag', 'Mutlivariate 90 Lag', 'Multivariate 60 Lag'], 'individual_error_summary.pkl', 'Different Lags')
+# # univariate lag
+# compare_models_n_fold(['LSTM Models/Lag Test/Univariate/150/', 'LSTM Models/input n_fold 2/univariate/'], [128, 128], [50, 50], ['mean hourly RMSE', 'median hourly RMSE'], ['Univariate Lag 150', 'Univariate Lag 120'], 'individual_error_summary.pkl', 'Different Lags')

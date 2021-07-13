@@ -12,8 +12,8 @@ from keras.layers import TimeDistributed, Dropout, MaxPooling1D, AveragePooling1
 from keras import regularizers
 from keras import Input
 from keras import Model
-from keras.layers import Concatenate
-from keras.optimizers import adam
+from keras.layers import Concatenate, Lambda
+from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TerminateOnNaN
 from keras import models
 import pickle
@@ -25,7 +25,7 @@ def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs
     # define hyper-parameters
     verbose = 1
     loss = 'mse'
-    optimiser = adam(learning_rate=learning_rate, clipnorm = clipnorm, decay=learning_rate/200)
+    optimiser = Adam(learning_rate=learning_rate, clipnorm = clipnorm, decay=learning_rate/200)
     activation = 'relu'
 
     # callback = EarlyStopping(monitor='val_loss', patience=10)
@@ -62,6 +62,7 @@ def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs
 
     decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_initializer=Orthogonal())
     decoder_output = decoder_layer(decoder_input, initial_state=encoder_states)
+    # decoder_output = Lambda(lambda x: x[:,-2:,:])(decoder_output)
     dense_input = Dropout(0.2)(decoder_output)
 
     # post pooling of forecast data
@@ -71,6 +72,76 @@ def build_model_init_states(train_x, train_y, test_x, test_y, batch_size, epochs
 
     dense_layer = TimeDistributed(Dense(dense_neurons, activation=activation))
     dense_output = dense_layer(dense_input)
+    outputs = TimeDistributed(Dense(1))(dense_output)
+
+    model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
+    print(model.summary())
+    model.compile(loss=loss, optimizer=optimiser)
+    # fit network
+    if sample_weights:
+        model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, sample_weight=np.array(sample_weights), callbacks=[callback_model, callback_nan])
+    else:
+        model.fit(train_x, train_y, validation_data=(test_x, test_y), epochs=epochs, batch_size=batch_size, verbose=verbose, callbacks=[callback_model, callback_nan])
+
+    return model
+
+def build_model_iterative(train_x, train_y, test_x, test_y, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, clipnorm, sample_weights=[], test_name='forecast'):
+    # define hyper-parameters
+    verbose = 1
+    loss = 'mse'
+    optimiser = Adam(learning_rate=learning_rate, clipnorm = clipnorm, decay=learning_rate/200)
+    activation = 'relu'
+
+    # adjust test and train data to contain only one variable
+    test_y = test_y[:,1]
+    test_y = test_y.reshape((-1,1))
+    train_y = train_y[:,1]
+    train_y = train_y.reshape((-1,1))
+
+    # callback = EarlyStopping(monitor='val_loss', patience=10)
+    filepath = "LSTM Models/Current Test/" + test_name + "-batch_size" + str(batch_size) + "-{epoch:02d}.hdf5"
+    callback_model = ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False, mode='auto', period=25)
+    callback_nan = TerminateOnNaN()
+
+    # extract shape of input and output
+    n_timesteps, n_features, n_outputs = train_x[0].shape[1], train_x[0].shape[2], train_y.shape[1]
+
+    # reshape output into [samples, timesteps, features]
+    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
+    test_y = test_y.reshape((test_y.shape[0], test_y.shape[1], 1))
+
+    # define model
+    encoder_input = Input(shape=(n_timesteps, n_features))
+    forecast_input = Input(shape=(24,1))
+
+    encoder_layer_1 = LSTM(encoder_units, activation=activation, kernel_initializer=Orthogonal(), return_state=True)
+    encoder_output, state_h, state_c = encoder_layer_1(encoder_input)
+    encoder_states = [state_h, state_c]
+    decoder_input = RepeatVector(n_outputs)(encoder_output)
+    decoder_input = Dropout(0.2)(decoder_input)
+
+    # pooling layer: augment for testing
+    # append entire forecast, potentially pass through dense layer
+    repeat_forecast = Flatten()(forecast_input)
+    repeat_forecast = RepeatVector(n_outputs)(repeat_forecast)
+    decoder_input = Concatenate(axis=2)([decoder_input, repeat_forecast])
+    # decoder_input = TimeDistributed(Dense(64, activation=activation))(decoder_input)
+
+    # original pooling:
+    # decoder_input = Concatenate(axis=2)([decoder_input, forecast_input])
+
+    # decoder_layer = LSTM(decoder_units, activation=activation, return_sequences=True, kernel_initializer=Orthogonal())
+    # decoder_output = decoder_layer(decoder_input, initial_state=encoder_states)
+    # decoder_output = Lambda(lambda x: x[:,-2:,:])(decoder_output)
+    # dense_input = Dropout(0.2)(decoder_output)
+
+    # post pooling of forecast data
+    # repeat_forecast = Flatten()(forecast_input)
+    # repeat_forecast = RepeatVector(n_outputs)(repeat_forecast)
+    # dense_input = Concatenate(axis=2)([decoder_input, repeat_forecast])
+
+    dense_layer = Dense(dense_neurons, activation=activation)
+    dense_output = dense_layer(decoder_input)
     outputs = TimeDistributed(Dense(1))(dense_output)
 
     model = Model(inputs=[encoder_input, forecast_input], outputs=outputs, name="model")
@@ -152,8 +223,9 @@ def read_pickle(folder):
         y_test = pickle.load(f)
     with open(folder + '/scalar_y.pkl', 'rb') as f:
         scalar_y = pickle.load(f)
-
     return x_train, y_train, x_test, y_test, scalar_y
+
+
 
 def calculate_sample_weights(y_test, bins, scalar_y):
     daily_frequency = []
@@ -248,7 +320,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
         x_train, x_test = edit_num_lags(x_train, x_test, lag)
 
     # change to uni or bivariate data
-    if test_name[0:10] == 'univariate':
+    if (test_name[0:10] == 'univariate') or (test_name[0:9]=='iterative'):
         x_train, x_test = convert_to_univariate(x_train, x_test)
     if test_name[0:9] == 'bivariate':
         x_train, x_test = convert_to_bivariate(x_train, x_test)
@@ -271,7 +343,7 @@ def train_from_saved_data(file_name, lag, batch_size, epochs, encoder_units, dec
     #     plt.title('future panting')
     #     plt.show()
 
-    model = build_model_init_states(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
+    model = build_model_iterative(x_train, y_train, x_test, y_test, batch_size, epochs, encoder_units, decoder_units, dense_neurons, learning_rate, 0.5, sample_weights, test_name=test_name)
     return model
 
 def change_test_train_ratio(x_train, y_train, x_test, y_test, train_size = 500, num_cows=197):
@@ -304,16 +376,16 @@ def grid_search(batch_dict, saved_data, test_name):
 
 def k_fold_test(batch_dict, saved_data):
     # loop through and run each model
-    for n in range(1,6):
+    for n in range(4,6):
         n_fold = str(n) + '_fold'
         for batch_size, lr in batch_dict.items():
             n_fold_file = saved_data + '/' + n_fold
-            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=125, encoder_units=64,
+            train_from_saved_data(file_name=n_fold_file, lag=120, batch_size=batch_size, epochs=100, encoder_units=64,
                                                                                                           decoder_units=64,
                                                                                                           dense_neurons=64,
                                                                                                           weights_flag=7,
                                                                                                           learning_rate=lr,
-                                                                                                          test_name='' + n_fold)
+                                                                                                          test_name='iterative_' + n_fold)
 
 # Define batch size and learning rate for univariate test
 # batch_dict = {512:0.0005, 256: 0.0005, 128: 0.0005, 64: 0.0005}
@@ -333,8 +405,8 @@ def k_fold_test(batch_dict, saved_data):
 
 # run k fold cross validation test
 # batch_dict = {256: 0.0002, 128: 0.0001, 64: 0.00002}
-batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
+# batch_dict = {256: 0.0005, 128: 0.0002, 64: 0.00005}
 # batch_dict = {256: 0.0005, 128: 0.0005, 64: 0.0005}
-# batch_dict = {128: 0.0002}
+batch_dict = {128: 0.0002}
 k_fold_test(batch_dict, 'Deep Learning Data/Multivariate Lag 200')
 
